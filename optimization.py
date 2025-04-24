@@ -1,34 +1,38 @@
-import torch
-
 from copy import deepcopy
 from time import time
 from tqdm import tqdm
 
+from core.deterministic_bounding import compute_det_bound
 from models.majority_vote import MultipleMajorityVote
 
-def train_batch(n, data, model, optimizer, bound=None, loss=None, nb_iter=1e4, monitor=None):
+
+def train_batch(n, data, model, optimizer, bound=None, loss=None, nb_iter=1e4, monitor=None, true_risk_bounding=False):
 
     model.train()
-
     pbar = tqdm(range(int(nb_iter)))
     for i in pbar:
         optimizer.zero_grad()
 
+        n_alphas = len(model.post)
+
         if bound is not None:
-            cost = bound(n, model, model.risk(data, loss))
+            if true_risk_bounding:
+                cost = compute_det_bound(model, bound, n, n_alphas, data, loss)
+            else:
+                cost = bound(n, model, model.risk(data, loss))
 
         else:
             cost = model.risk(data, loss)
 
         pbar.set_description("train obj %s" % cost.item())
-
         cost.backward()
         optimizer.step()
 
         if monitor:
             monitor.write_all(i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
 
-def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None, monitor=None):
+
+def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None, monitor=None, true_risk_bounding=False):
 
     model.train()
 
@@ -44,46 +48,52 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
 
         # import pdb; pdb.set_trace()
         optimizer.zero_grad()
+        n_alphas = len(model.post)
 
         if bound is not None:
-            cost = bound(n, model, model.risk(data, loss))
+            if true_risk_bounding:
+                cost = compute_det_bound(model, bound, n, n_alphas, data, loss)
+            else:
+                cost = bound(n, model, model.risk(data, loss))
 
         else:
             cost = model.risk(data, loss)
-            
+
         train_obj += cost.item()
 
         pbar.set_description("avg train obj %f" % (train_obj / (i + 1)))
 
         cost.backward()
         optimizer.step()
-        
+
         if monitor:
-            monitor.write_all(last_iter+i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
+            monitor.write_all(last_iter + i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
 
-def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, loss=None, monitor=None):
-
+def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, loss=None, monitor=None, true_risk_bounding=False):
     model.train()
 
     last_iter = epoch * len(dataloaders[0])
     train_obj = 0.
 
     pbar = tqdm(range(len(dataloaders[0])))
-    
+
     for i, *batches in zip(pbar, *dataloaders):
         # import pdb; pdb.set_trace()
-        
+
         X = [batch[0] for batch in batches]
         # sum sizes of loaders
         n = sum(map(len, X))
         pred = model(X)
         data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-
         # import pdb; pdb.set_trace()
         optimizer.zero_grad()
+        n_alphas = len(model.post)
 
         if bound is not None:
-            cost = bound(n, model, model.risk(data, loss))
+            if true_risk_bounding:
+                cost = compute_det_bound(model, bound, n, n_alphas, data, loss)
+            else:
+                cost = bound(n, model, model.risk(data, loss))
 
         else:
             cost = model.risk(data, loss)
@@ -91,15 +101,14 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
         train_obj += cost.item()
 
         pbar.set_description("avg train obj %f" % (train_obj / (i + 1)))
-
         cost.backward()
         optimizer.step()
-        
-        if monitor:
-            monitor.write_all(last_iter+i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
-            
-def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):
 
+        if monitor:
+            monitor.write_all(last_iter + i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
+
+
+def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):
     model.eval()
 
     risk = 0.
@@ -107,7 +116,6 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
     n = 0
 
     for batch in dataloader:
-
         data = batch[1], model(batch[0])
         risk += model.risk(data, loss=loss, mean=False)
         strength += sum(model.voter_strength(data))
@@ -127,8 +135,8 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
 
     return total_metrics
 
-def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):
 
+def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):
     model.eval()
 
     risk = 0.
@@ -136,7 +144,6 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
     strength = 0.
 
     for batches in zip(*dataloaders):
-
         X = [batch[0] for batch in batches]
         pred = model(X)
         data = [(batches[i][1], pred[i]) for i in range(len(batches))]
@@ -160,28 +167,30 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
     return total_metrics
 
-def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, loss=None, monitor=None, num_epochs=100, lr_scheduler=None):
+
+def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, loss=None, monitor=None,
+                       num_epochs=100, lr_scheduler=None, true_risk_bounding=False):
 
     best_bound = float("inf")
+    best_model = deepcopy(model)
     best_e = -1
     no_improv = 0
-    best_train_stats = None
+    best_train_stats = {bound_type: None}
 
-    if isinstance(model, MultipleMajorityVote): # then expect multiple dataloaders
+    if isinstance(model, MultipleMajorityVote):  # then expect multiple dataloaders
         train_routine = train_stochastic_multiset
         val_routine = evaluate_multiset
         test_routine = lambda d, *args, **kwargs: evaluate_multiset((d, d), *args, **kwargs)
     else:
         train_routine, val_routine, test_routine = train_stochastic, evaluate, evaluate
 
-    
     t1 = time()
     for e in range(num_epochs):
-        train_routine(trainloader, model, optimizer, epoch=e, bound=bound, loss=loss, monitor=monitor)
+        train_routine(trainloader, model, optimizer, epoch=e, bound=bound, loss=loss, monitor=monitor, true_risk_bounding=true_risk_bounding)
 
-        train_stats = val_routine(trainloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train") # just for monitoring purposes
+        train_stats = val_routine(trainloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train")  # just for monitoring purposes
         print(f"Epoch {e}: {train_stats[bound_type]}\n")
-        
+
         no_improv += 1
         if train_stats[bound_type] < best_bound:
             best_bound = train_stats[bound_type]
@@ -204,4 +213,4 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
 
     print(f"Test error: {test_error['error']}; {bound_type} bound: {best_train_stats[bound_type]}\n")
 
-    return best_model, best_bound, best_train_stats, train_error, test_error, t2-t1
+    return best_model, best_bound, best_train_stats, train_error, test_error, t2 - t1
