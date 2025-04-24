@@ -37,7 +37,7 @@ def main(cfg):
     print("results will be saved in:", ROOT_DIR.resolve()) 
 
     # define params for each method
-    risks = { # type: (loss, bound-coeff, distribution-type, kl factor)
+    risks = { # type: (loss, bound-coeff, distribution-type, kl_factor)
         "exact": (None, 1., "dirichlet", 1.),
         "MC": (lambda x, y, z: sigmoid_loss(x, y, z, c=cfg.training.sigmoid_c), 1., "dirichlet", 1.),
         "Rnd": (lambda x, y, z: rand_loss(x, y, z, n=cfg.training.rand_n), 2., "categorical", cfg.training.rand_n),
