@@ -1,5 +1,7 @@
 import hydra
 from pathlib import Path
+import wandb
+wandb.login()
 
 import numpy as np
 import torch
@@ -60,6 +62,10 @@ def main(cfg):
             seed_results = np.load(SAVE_DIR / "err-b.npy", allow_pickle=True).item()
 
         else:
+            config = create_config_dico(cfg)
+            run_name = create_run_name(config)
+            if cfg.is_using_wandb:
+                wandb.init(name=str(run_name), project=cfg.project_name, config=config)
 
             seed_results = {}
 
@@ -143,6 +149,10 @@ def main(cfg):
             # save seed results
             np.save(SAVE_DIR / "err-b.npy", seed_results)
             monitor.close()
+
+            if cfg.is_using_wandb:
+                wandb.log(seed_results)
+                wandb.finish()
 
         train_errors.append(seed_results["train-error"])
         test_errors.append(seed_results["test-error"])
