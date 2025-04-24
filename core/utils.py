@@ -2,10 +2,31 @@ import torch
 import numpy as np
 import random
 
-from tqdm import tqdm
-
 from betaincder import betainc, betaincderp, betaincderq
-from torch import lgamma, digamma, log1p, exp, log
+from torch import lgamma, log1p, exp, log
+
+
+def updating_first_seed_results(seed_results, cfg, time, model, train_err, test_err, best_train_stats, bound_true_n_f):
+    seed_results["train-error"] = train_err['error']
+    seed_results["test-error"] = test_err['error']
+    seed_results["train-risk"] = best_train_stats["error"]
+    seed_results[cfg.bound.type] = best_train_stats[cfg.bound.type]
+    seed_results[cfg.bound.type+'_true_no_finetune'] = bound_true_n_f
+    seed_results["time"] = time
+    seed_results["posterior"] = model.get_post().detach().numpy()
+    seed_results["strength"] = best_train_stats["strength"]
+    seed_results["KL"] = model.KL().item()
+    seed_results["entropy"] = model.entropy().item()
+    seed_results["factor"] = seed_results[cfg.bound.type+'_true_no_finetune'] / seed_results[cfg.bound.type]
+    return seed_results
+
+def updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune):
+    seed_results["train-error_finetune"] = train_error['error']
+    seed_results["test-error_finetune"] = test_error['error']
+    seed_results[cfg.bound.type + '_finetune'] = best_train_stats[cfg.bound.type]
+    seed_results[cfg.bound.type + '_true_finetune'] = bound_true_with_finetune
+    seed_results["factor_finetune"] = seed_results[cfg.bound.type + '_true_finetune'] / seed_results[cfg.bound.type + '_finetune']
+    return seed_results
 
 def deterministic(random_state):
     np.random.seed(random_state)
