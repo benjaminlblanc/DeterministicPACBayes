@@ -1,0 +1,31 @@
+num_trials: 10
+num_workers: 8 # for dataloaders
+
+model:
+  M: 100 # number of predictors, if stumps: 2*M per dimension
+  prior: 1 # param of the Dirichlet prior
+  pred: "rf" # random forest or "stumps-uniform"
+  bootstrap: 0.5 # for informed priors
+  tree_depth: None # for informed priors
+
+  # deprecated param: m always equal to 0.5
+  m: 0.5 # for informed priors: use first m * N_train points to learn one prior, and last (1-m) * N_train to learn the other prior
+  uniform: False
+
+training:
+  seed: 23042021
+  lr: 0.1
+  batch_size: 1024
+  num_epochs: 100
+  risk: "exact" # or MC, SO, FO, Rnd
+  opt_bound: True # or optimize only risk
+  sigmoid_c: 100 # only for MC
+  rand_n: 100 # only for Rnd
+  MC_draws: 10 # only for MC
+
+dataset: 'SVMGUIDE'
+
+bound:
+  delta: 0.05
+  type: "seeger"
+  stochastic: False
