@@ -2,6 +2,7 @@ import numpy as np
 import bz2
 import requests
 import os
+from tqdm import tqdm
 
 from sklearn.model_selection import train_test_split
 
