@@ -85,7 +85,7 @@ def get_bound_on_pred_norm(leaf_values, func):
         tot += func(leaf_values[i])
     return tot ** 0.5
 
-def compute_det_bound(model, bound, n, n_alphas, train_data, loss, cur_PB_bound=None):
+def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, cur_PB_bound=None):
     """
     Pipeline for computing the deterministic bound.
     """
@@ -93,10 +93,13 @@ def compute_det_bound(model, bound, n, n_alphas, train_data, loss, cur_PB_bound=
     leaves[:, 0] = -1
     l, u, l_1_norm = get_normalized_l_u(leaves, model.post, 'sign', 'dirichlet')
     if cur_PB_bound is None:
-        cur_PB_bound = bound(n, model, model.risk(train_data, loss))
+        cur_PB_bound = 0
+        for _, batch in enumerate(trainloader):
+            train_data = batch[1], model(batch[0])
+            cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss))
     return deterministic_bound(cur_PB_bound, l, u, l_1_norm, 'dirichlet', 0)
 
-def crop_weak_learners(model, n, bound, whole_batch, loss, prior_coefficient):
+def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
     """
     Assigns small weights to predictors with medium weights, so that l and u might
         respectively be big and small.
@@ -107,9 +110,8 @@ def crop_weak_learners(model, n, bound, whole_batch, loss, prior_coefficient):
     # Making sure that every weight has a unique value.
     best_alphas += torch.rand(len(best_alphas)) * 0.001
     model.set_post(best_alphas)
-    train_data = whole_batch[1], model(whole_batch[0])
 
-    best_bound = compute_det_bound(model, bound, n, n_alphas, train_data, loss)
+    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
     changed = True
     while changed:
         changed = False
@@ -123,9 +125,8 @@ def crop_weak_learners(model, n, bound, whole_batch, loss, prior_coefficient):
                     post[i] = post[i] + (change == 'max') * 1 - (change == 'min') * 1 + 0.01 + torch.rand(1) * 0.001
                     model.set_post(post)
                     # And compute the resulting bound.
-                    cur_PB_bound = bound(n, model, model.risk(train_data, loss))
-                    cur_bound = compute_det_bound(model, bound, n, n_alphas, train_data, loss, cur_PB_bound)
-                    if cur_bound < best_bound and cur_bound > cur_PB_bound:
+                    cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
+                    if cur_bound < best_bound:
                         best_bound = cur_bound
                         best_alphas = model.get_post()
                         changed = True
