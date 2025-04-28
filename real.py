@@ -76,7 +76,6 @@ def main(cfg):
             except:
                 data = Dataset(cfg.dataset, normalize=True, data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
 
-            m = 0
             if cfg.model.pred == "stumps-uniform":
                 predictors, M = uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0))
 
@@ -148,7 +147,7 @@ def main(cfg):
 
             # First training phase
             *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
-            bound_true_no_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound=best_train_stats[cfg.bound.type])
+            bound_true_no_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
             # Results are compiled in the 'seed_results' dictionary
             seed_results = updating_first_seed_results(seed_results, cfg, time, model, train_error, test_error,
                                         best_train_stats, bound_true_no_finetune)
@@ -156,8 +155,8 @@ def main(cfg):
             # Cropping the weight of base predictors that barely have an effect on the prediction
             model = crop_weak_learners(model, n, bound, full_batch, loss, prior_coefficient)
             # Second training phase
-            *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
-            bound_true_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound=best_train_stats[cfg.bound.type])
+            *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
+            bound_true_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
             # Results are compiled in the 'seed_results' dictionary
             seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune)
 

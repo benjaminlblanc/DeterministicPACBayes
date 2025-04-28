@@ -30,13 +30,31 @@ def deterministic_bound(Gibbs_risk, l, u, l_1_norm, distribution, a):
         I_l, I_u = I(l_1_norm - l, l, a), I(u, l_1_norm - u, a)
         return (Gibbs_risk - I_u) / (I_l - I_u)
 
+def get_indices(possible_values, sums):
+    """
+    Returns two vector of indices, associating the position of each element of possible_values
+        in each vector sums[0] and sums[1].
+    """
+    tot, tot_1, tot_2 = [], [], []
+    for i in range(len(sums[0])):
+        cur = np.argwhere(sums[0][i] == possible_values)
+        tot_1.append(cur[0][0])
+        possible_values[cur[0][0]] = -1
+    for i in range(len(sums[1])):
+        cur = np.argwhere(sums[1][i] == possible_values)
+        tot_2.append(cur[0][0])
+        possible_values[cur[0][0]] = -1
+    tot.append(tot_1)
+    tot.append(tot_2)
+    return tot
+
 def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribution):
     """
     Returns the l and u values from the true-risk bound (see --).
     """
     remainder = 0
     if leaf_type == 'sign':
-        possible_values = normalized_tree_weights
+        possible_values = torch.exp(normalized_tree_weights.clone().detach()).numpy()
     else:
         normalized_leaf_values = np.reshape(normalized_tree_weights, (-1, 1)) * leaf_values
         possible_values = []
@@ -46,8 +64,11 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
         possible_values.append(remainder)
     sums = prtpy.partition(algorithm=prtpy.partitioning.ilp, numbins=2, items=np.sort(possible_values),
                            objective=prtpy.obj.MaximizeSmallestSum)
-    biggest_sum = max(np.sum(sums[0]), np.sum(sums[1]))
-    smallest_sum = min(np.sum(sums[0]), np.sum(sums[1]))
+    indices = get_indices(possible_values, sums)
+    sum_1 = torch.sum(torch.exp(normalized_tree_weights[indices[0]]))
+    sum_2 = torch.sum(torch.exp(normalized_tree_weights[indices[1]]))
+    biggest_sum = torch.max(sum_1, sum_2)
+    smallest_sum = torch.min(sum_1, sum_2)
     if distribution == "gaussian":
         return ((biggest_sum - smallest_sum) / get_bound_on_pred_norm(leaf_values, max),
                 np.sum(np.abs(possible_values)) - remainder), None
@@ -70,10 +91,10 @@ def compute_det_bound(model, bound, n, n_alphas, train_data, loss, cur_PB_bound=
     """
     leaves = np.ones((n_alphas, 2))
     leaves[:, 0] = -1
-    l, u, l_1_norm = get_normalized_l_u(leaves, model.get_post().detach().numpy(), 'sign', 'dirichlet')
+    l, u, l_1_norm = get_normalized_l_u(leaves, model.post, 'sign', 'dirichlet')
     if cur_PB_bound is None:
         cur_PB_bound = bound(n, model, model.risk(train_data, loss))
-    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, 'dirichlet', 0).item()
+    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, 'dirichlet', 0)
 
 def crop_weak_learners(model, n, bound, whole_batch, loss, prior_coefficient):
     """
@@ -92,8 +113,8 @@ def crop_weak_learners(model, n, bound, whole_batch, loss, prior_coefficient):
     changed = True
     while changed:
         changed = False
-        print(f"Current true-risk bound: {best_bound}.")
         pbar = tqdm(range(len(model.post)))
+        print(f"Current true-risk bound: {best_bound}.")
         for i in pbar:
             if best_alphas[i] >= 1:
                 for change in ['min', 'max']:
