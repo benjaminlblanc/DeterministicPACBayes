@@ -75,14 +75,14 @@ def compute_det_bound(model, bound, n, n_alphas, train_data, loss, cur_PB_bound=
         cur_PB_bound = bound(n, model, model.risk(train_data, loss))
     return deterministic_bound(cur_PB_bound, l, u, l_1_norm, 'dirichlet', 0).item()
 
-def crop_weak_learners(model, n, bound, whole_batch, loss):
+def crop_weak_learners(model, n, bound, whole_batch, loss, prior_coefficient):
     """
     Assigns small weights to predictors with medium weights, so that l and u might
         respectively be big and small.
     """
     best_alphas = model.get_post()
     n_alphas = len(best_alphas)
-    best_alphas[best_alphas < 1] = 1 / n_alphas
+    best_alphas[best_alphas < 1] = prior_coefficient
     # Making sure that every weight has a unique value.
     best_alphas += torch.rand(len(best_alphas)) * 0.001
     model.set_post(best_alphas)

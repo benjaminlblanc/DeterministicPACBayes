@@ -122,7 +122,7 @@ def main(cfg):
 
             testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096, num_workers=cfg.num_workers, shuffle=False)
 
-            prior_coefficient = 1 / M if cfg.model.prior == "adjusted" else cfg.model.prior
+            prior_coefficient = 1 / M if cfg.model.prior == "adjusted" else int(cfg.model.prior)
 
             # Creating a batch containing every training examples
             train_batch = DataLoader(train, batch_size=len(data.y_train), num_workers=cfg.num_workers, shuffle=True)
@@ -154,7 +154,7 @@ def main(cfg):
                                         best_train_stats, bound_true_no_finetune)
 
             # Cropping the weight of base predictors that barely have an effect on the prediction
-            model = crop_weak_learners(model, n, bound, full_batch, loss)
+            model = crop_weak_learners(model, n, bound, full_batch, loss, prior_coefficient)
             # Second training phase
             *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
             bound_true_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound=best_train_stats[cfg.bound.type])

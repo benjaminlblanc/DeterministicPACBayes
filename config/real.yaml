@@ -1,5 +1,6 @@
 project_name: "DeterministicPACBayes"
 num_trials: 1
+num_trials: 5
 num_workers: 8 # for dataloaders
 is_using_wandb: True
 
