@@ -20,7 +20,8 @@ def updating_first_seed_results(seed_results, cfg, time, model, train_err, test_
     seed_results["factor"] = seed_results[cfg.bound.type+'_true_no_finetune'] / seed_results[cfg.bound.type]
     return seed_results
 
-def updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune):
+def updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune, i):
+    seed_results["seed"] = cfg.training.seed+i
     seed_results["train-error_finetune"] = train_error['error']
     seed_results["test-error_finetune"] = test_error['error']
     seed_results[cfg.bound.type + '_finetune'] = best_train_stats[cfg.bound.type]

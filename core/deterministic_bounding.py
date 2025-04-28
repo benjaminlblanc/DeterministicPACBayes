@@ -93,11 +93,15 @@ def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, cur_PB_bound
     leaves[:, 0] = -1
     l, u, l_1_norm = get_normalized_l_u(leaves, model.post, 'sign', 'dirichlet')
     if cur_PB_bound is None:
-        cur_PB_bound = 0
-        for _, batch in enumerate(trainloader):
-            train_data = batch[1], model(batch[0])
-            cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss))
-    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, 'dirichlet', 0)
+        if type(trainloader) == tuple:
+            train_data = trainloader[1], model(trainloader[0])
+            cur_PB_bound = bound(n, model, model.risk(train_data, loss))
+        else:
+            cur_PB_bound = 0
+            for _, batch in enumerate(trainloader):
+                train_data = batch[1], model(batch[0])
+                cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss))
+    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, 'dirichlet', model.a)
 
 def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
     """
@@ -105,12 +109,37 @@ def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
         respectively be big and small.
     """
     best_alphas = model.get_post()
+    sorted_alphas = torch.sort(best_alphas.clone())[0]
     n_alphas = len(best_alphas)
-    best_alphas[best_alphas < 1] = prior_coefficient
-    # Making sure that every weight has a unique value.
-    best_alphas += torch.rand(len(best_alphas)) * 0.001
-    model.set_post(best_alphas)
+    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
+    pbar = tqdm(range(12))
+    low, up = 0, n_alphas-1
+    print(f"Current true-risk bound: {best_bound}.")
+    for _ in pbar:
+        if up - low <= 1:
+            break
+        mean = int((up + low) / 2)
+        post = model.get_post().clone()
+        post[best_alphas <= sorted_alphas[mean]] = prior_coefficient
+        model.set_post(post)
+        cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
+        if cur_bound < best_bound:
+            best_bound = cur_bound
+            best_alphas = model.get_post()
+            low = mean
+            print(f"Current true-risk bound: {best_bound}.")
+        else:
+            post = best_alphas
+            model.set_post(post)
+            up = mean
+    return model
 
+def manual_model_finetune(model, n, bound, trainloader, loss):
+    """
+    Manually search for the best .
+    """
+    best_alphas = model.get_post()
+    n_alphas = len(best_alphas)
     best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
     changed = True
     while changed:
@@ -122,7 +151,8 @@ def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
                 for change in ['min', 'max']:
                     # We slightly modify the current weighting
                     post = model.get_post()
-                    post[i] = post[i] + (change == 'max') * 1 - (change == 'min') * 1 + 0.01 + torch.rand(1) * 0.001
+                    factor = torch.max(post) / 100
+                    post[i] = post[i] + (change == 'max') * factor - (change == 'min') * factor + 0.01 + torch.rand(1) * 0.001
                     model.set_post(post)
                     # And compute the resulting bound.
                     cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)

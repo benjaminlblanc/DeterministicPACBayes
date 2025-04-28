@@ -10,7 +10,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from core.deterministic_bounding import crop_weak_learners, compute_det_bound
+from core.deterministic_bounding import crop_weak_learners, compute_det_bound, manual_model_finetune
 from core.wandb_formatting import create_config_dico, create_run_name
 from core.bounds import BOUNDS
 from core.losses import sigmoid_loss, moment_loss, rand_loss
@@ -41,7 +41,7 @@ def main(cfg):
     print("results will be saved in:", ROOT_DIR.resolve())
 
     # define params for each method
-    risks = { # type: (loss, bound-coeff, distribution-type, kl_factor)
+    risks = { # type: (loss, bound_coeff, distribution_type, kl_factor)
         "exact": (None, 1., "dirichlet", 1.),
         "MC": (lambda x, y, z: sigmoid_loss(x, y, z, c=cfg.training.sigmoid_c), 1., "dirichlet", 1.),
         "Rnd": (lambda x, y, z: rand_loss(x, y, z, n=cfg.training.rand_n), 2., "categorical", cfg.training.rand_n),
@@ -90,6 +90,7 @@ def main(cfg):
                 raise NotImplementedError("model.pred should be one the following: [stumps-uniform, rf]")
 
             loss, coeff, distr, kl_factor = risks[cfg.training.risk]
+            a = cfg.model.a
 
             bound = None
             if cfg.training.opt_bound:
@@ -127,12 +128,12 @@ def main(cfg):
                 betas = [torch.ones(M) * cfg.model.prior for p in predictors] # prior
 
                 # weights proportional to data sizes
-                model = MultipleMajorityVote(predictors, betas, weights=(0.5, 0.5), mc_draws=cfg.training.MC_draws, distr=distr, kl_factor=kl_factor)
+                model = MultipleMajorityVote(predictors, betas, a, weights=(0.5, 0.5), mc_draws=cfg.training.MC_draws, distr=distr, kl_factor=kl_factor)
 
             else:
                 betas = torch.ones(M) * prior_coefficient # prior
 
-                model = MajorityVote(predictors, betas, mc_draws=cfg.training.MC_draws, distr=distr, kl_factor=kl_factor)
+                model = MajorityVote(predictors, betas, a, mc_draws=cfg.training.MC_draws, distr=distr, kl_factor=kl_factor)
 
             n_alphas = len(model.post)
             monitor = MonitorMV(SAVE_DIR)
@@ -149,11 +150,13 @@ def main(cfg):
 
             # Cropping the weight of base predictors that barely have an effect on the prediction
             model = crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient)
+            model = manual_model_finetune(model, n, bound, trainloader, loss)
+
             # Second training phase
             *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
             bound_true_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
             # Results are compiled in the 'seed_results' dictionary
-            seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune)
+            seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune, i)
 
             print(f"Prior results. Test error: {round(seed_results['test-error'], 4)};\t {cfg.bound.type}: {round(seed_results[cfg.bound.type], 4)};\t {cfg.bound.type}_true: {round(seed_results[cfg.bound.type+'_true_no_finetune'], 4)}.")
             print(f"Post. results. Test error: {round(seed_results['test-error_finetune'], 4)};\t {cfg.bound.type}: {round(seed_results[cfg.bound.type + '_finetune'], 4)};\t {cfg.bound.type}_true: {round(seed_results[cfg.bound.type + '_true_finetune'], 4)}.")

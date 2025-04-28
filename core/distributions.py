@@ -8,10 +8,11 @@ from core.utils import BetaInc
 
 class Dirichlet():
 
-    def __init__(self, alpha, mc_draws=10):
+    def __init__(self, alpha, a, mc_draws=10):
 
         self.alpha = alpha
         self.mc_draws = mc_draws
+        self.a = a
 
     # Kullback-Leibler divergence between two Dirichlets
     def KL(self, beta):
@@ -31,7 +32,7 @@ class Dirichlet():
         correct = torch.where(y_target == y_pred, exp_alpha, torch.zeros(1)).sum(1)
         wrong = torch.where(y_target != y_pred, exp_alpha, torch.zeros(1)).sum(1)
         
-        s = [BetaInc.apply(c, w, torch.tensor(0.5)) for c, w in zip(correct, wrong)]
+        s = [BetaInc.apply(c, w, torch.tensor(0.5 + self.a / 2)) for c, w in zip(correct, wrong)]
 
         if mean:
             return sum(s) / len(y_target)
