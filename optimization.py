@@ -39,9 +39,7 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
     last_iter = epoch * len(dataloader)
     train_obj = 0.
 
-    pbar = tqdm(dataloader)
-
-    for i, batch in enumerate(pbar):
+    for i, batch in enumerate(dataloader):
 
         n = len(batch[0])
         data = batch[1], model(batch[0])
@@ -61,8 +59,6 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
             cost = model.risk(data, loss)
 
         train_obj += cost.item()
-
-        pbar.set_description("avg train obj %f" % (train_obj / (i + 1)))
 
         cost.backward()
         optimizer.step()
@@ -186,11 +182,12 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
         train_routine, val_routine, test_routine = train_stochastic, evaluate, evaluate
 
     t1 = time()
-    for e in range(num_epochs):
+
+    pbar = tqdm(range(num_epochs))
+    for e in pbar:
         train_routine(trainloader, model, optimizer, epoch=e, bound=bound, loss=loss, monitor=monitor, true_risk_bounding=true_risk_bounding)
 
         train_stats = val_routine(trainloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train")  # just for monitoring purposes
-        print(f"Epoch {e}: {train_stats[bound_type]}\n")
 
         no_improv += 1
         if train_stats[bound_type] < best_bound:
@@ -206,6 +203,8 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
 
         if no_improv == num_epochs // 4:
             break
+
+        pbar.set_description("train obj %s" % train_stats[bound_type])
 
     t2 = time()
 
