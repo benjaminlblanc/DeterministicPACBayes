@@ -113,7 +113,7 @@ def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
     n_alphas = len(best_alphas)
     best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
     pbar = tqdm(range(12))
-    low, up = 0, n_alphas-1
+    low, up, strikes = 0, n_alphas-1, 0
     print(f"Current true-risk bound: {best_bound}.")
     for _ in pbar:
         if up - low <= 1:
@@ -131,7 +131,10 @@ def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
         else:
             post = best_alphas
             model.set_post(post)
-            up = mean
+            if strikes < 3:
+                low = low + 2
+            else:
+                up = mean
     return model
 
 def manual_model_finetune(model, n, bound, trainloader, loss):
