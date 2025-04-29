@@ -147,11 +147,11 @@ def manual_model_finetune(model, n, bound, trainloader, loss):
         pbar = tqdm(range(len(model.post)))
         print(f"Current true-risk bound: {best_bound}.")
         for i in pbar:
-            if best_alphas[i] >= 1:
+            factor = torch.max(model.get_post()) / 100
+            if best_alphas[i] >= factor:
                 for change in ['min', 'max']:
                     # We slightly modify the current weighting
                     post = model.get_post()
-                    factor = torch.max(post) / 100
                     post[i] = post[i] + (change == 'max') * factor - (change == 'min') * factor + 0.01 + torch.rand(1) * 0.001
                     model.set_post(post)
                     # And compute the resulting bound.
