@@ -17,7 +17,7 @@ def train_batch(n, data, model, optimizer, bound=None, loss=None, nb_iter=1e4, m
 
         if bound is not None:
             if true_risk_bounding:
-                cost = compute_det_bound(model, bound, n, n_alphas, data, loss)
+                cost = compute_det_bound(model, bound, n, n_alphas, data, loss, model.distribution_name)
             else:
                 cost = bound(n, model, model.risk(data, loss))
 
@@ -88,7 +88,7 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
 
         if bound is not None:
             if true_risk_bounding:
-                cost = compute_det_bound(model, bound, n, n_alphas, data, loss)
+                cost = compute_det_bound(model, bound, n, n_alphas, data, loss, model.distribution_name)
             else:
                 cost = bound(n, model, model.risk(data, loss))
 

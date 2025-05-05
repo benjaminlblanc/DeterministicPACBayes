@@ -130,7 +130,7 @@ class Gaussian():
 
 class Categorical():
 
-    def __init__(self, theta, mc_draws=10):
+    def __init__(self, theta, a, mc_draws=10):
         self.theta = theta
         self.mc_draws = mc_draws
         

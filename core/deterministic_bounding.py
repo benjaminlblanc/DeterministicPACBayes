@@ -11,12 +11,14 @@ def I(l, u, a):
     c = torch.tensor((1 + a) / 2)
     return BetaInc.apply(l, u, c)
 
-def deterministic_bound(Gibbs_risk, l, u, l_1_norm, distribution, a):
+def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a):
     """
     Computes Ben's bound, given Gibbs risk, u and l.
     """
     if distribution == "gaussian":
-        phi_l, phi_u = Phi(l), Phi(u)
+        biggest_norm = get_bound_on_pred_norm(leaf_values, max)
+        smallest_norm = get_bound_on_pred_norm(leaf_values, min)
+        phi_l, phi_u = Phi((l + a) / biggest_norm), Phi((u - a) / smallest_norm)
         return (Gibbs_risk - phi_u) / (1 - phi_l - phi_u)
     elif distribution == "dirichlet":
         I_l, I_u = I(l_1_norm - l, l, a), I(u, l_1_norm - u, a)
@@ -63,9 +65,7 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
     if distribution == "gaussian":
         sum_1 = torch.sum(normalized_tree_weights[indices[0]])
         sum_2 = torch.sum(normalized_tree_weights[indices[1]])
-        biggest_norm = get_bound_on_pred_norm(leaf_values, max)
-        smallest_norm = get_bound_on_pred_norm(leaf_values, min)
-        return torch.abs(sum_1 - sum_2) / biggest_norm, torch.sum(torch.abs(normalized_tree_weights)) / smallest_norm, None
+        return torch.abs(sum_1 - sum_2), torch.sum(torch.abs(normalized_tree_weights)), None
     elif distribution == "dirichlet":
         sum_1 = torch.sum(torch.exp(normalized_tree_weights[indices[0]]))
         sum_2 = torch.sum(torch.exp(normalized_tree_weights[indices[1]]))
@@ -99,7 +99,7 @@ def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution
             for _, batch in enumerate(trainloader):
                 train_data = batch[1], model(batch[0])
                 cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss))
-    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, distribution_name, model.a)
+    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, leaves, distribution_name, model.a)
 
 def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name):
     """
