@@ -22,6 +22,7 @@ def create_config_dico(cfg):
             'batch_size': cfg['training']['batch_size'],
             'num_epochs': cfg['training']['num_epochs'],
             'risk': cfg['training']['risk'],
+            'distribution': cfg['training']['distribution'],
             'opt_bound': cfg['training']['opt_bound'],
             'sigmoid_c': cfg['training']['sigmoid_c'],
             'rand_n': cfg['training']['rand_n'],
@@ -36,5 +37,5 @@ def create_run_name(config):
     """
     Given a dictionary of config, returns a run name.
     """
-    return 'dataset=' + config['dataset'] + '_risk=' + config['risk'] + '_pred-type=' + config['pred'] + '_M=' + \
-            str(config['M']) + '_prior=' + str(config['prior']) + '_seed=' + str(config['seed'])
+    return 'dataset=' + config['dataset'] + '_distr=' + config['distribution'] + '_risk=' + config['risk'] + '_pred-type=' + \
+           config['pred'] + '_M=' + str(config['M']) + '_prior=' + str(config['prior']) + '_seed=' + str(config['seed'])

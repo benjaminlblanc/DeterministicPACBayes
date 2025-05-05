@@ -51,7 +51,7 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
         if bound is not None:
             if true_risk_bounding:
                 cur_PB_bound = bound(n, model, model.risk(data, loss))
-                cost = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound)
+                cost = compute_det_bound(model, bound, n, n_alphas, data, loss, model.distribution_name, cur_PB_bound)
             else:
                 cost = bound(n, model, model.risk(data, loss))
 
@@ -123,7 +123,6 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
     total_metrics = {"error": risk.item(), "strength": strength.item()}
 
     if bounds is not None:
-
         for k in bounds.keys():
             total_metrics[k] = bounds[k](n, model, risk).item()
 

@@ -1,16 +1,8 @@
-from scipy.special import erf
 import prtpy
 import torch
 import numpy as np
-from core.utils import BetaInc
+from core.utils import BetaInc, Phi
 from tqdm import tqdm
-
-
-def Phi(z):
-    """
-    Computes the Phi function.
-    """
-    return 1 / 2 * (1 - erf(z / 2 ** 0.5))
 
 def I(l, u, a):
     """
@@ -54,7 +46,10 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
     """
     remainder = 0
     if leaf_type == 'sign':
-        possible_values = torch.exp(normalized_tree_weights.clone().detach()).numpy()
+        if distribution == 'dirichlet':
+            possible_values = torch.exp(normalized_tree_weights.clone().detach()).numpy()
+        else:
+            possible_values = normalized_tree_weights.clone().detach().numpy()
     else:
         normalized_leaf_values = np.reshape(normalized_tree_weights, (-1, 1)) * leaf_values
         possible_values = []
@@ -64,15 +59,18 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
         possible_values.append(remainder)
     sums = prtpy.partition(algorithm=prtpy.partitioning.ilp, numbins=2, items=np.sort(possible_values),
                            objective=prtpy.obj.MaximizeSmallestSum)
-    indices = get_indices(possible_values, sums)
-    sum_1 = torch.sum(torch.exp(normalized_tree_weights[indices[0]]))
-    sum_2 = torch.sum(torch.exp(normalized_tree_weights[indices[1]]))
-    biggest_sum = torch.max(sum_1, sum_2)
-    smallest_sum = torch.min(sum_1, sum_2)
+    indices = get_indices(possible_values.copy(), sums)
     if distribution == "gaussian":
-        return ((biggest_sum - smallest_sum) / get_bound_on_pred_norm(leaf_values, max),
-                np.sum(np.abs(possible_values)) - remainder), None
+        sum_1 = torch.sum(normalized_tree_weights[indices[0]])
+        sum_2 = torch.sum(normalized_tree_weights[indices[1]])
+        biggest_norm = get_bound_on_pred_norm(leaf_values, max)
+        smallest_norm = get_bound_on_pred_norm(leaf_values, min)
+        return torch.abs(sum_1 - sum_2) / biggest_norm, torch.sum(torch.abs(normalized_tree_weights)) / smallest_norm, None
     elif distribution == "dirichlet":
+        sum_1 = torch.sum(torch.exp(normalized_tree_weights[indices[0]]))
+        sum_2 = torch.sum(torch.exp(normalized_tree_weights[indices[1]]))
+        biggest_sum = torch.max(sum_1, sum_2)
+        smallest_sum = torch.min(sum_1, sum_2)
         return biggest_sum, biggest_sum + smallest_sum, biggest_sum + smallest_sum
 
 def get_bound_on_pred_norm(leaf_values, func):
@@ -85,13 +83,13 @@ def get_bound_on_pred_norm(leaf_values, func):
         tot += func(leaf_values[i])
     return tot ** 0.5
 
-def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, cur_PB_bound=None):
+def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name, cur_PB_bound=None):
     """
     Pipeline for computing the deterministic bound.
     """
     leaves = np.ones((n_alphas, 2))
     leaves[:, 0] = -1
-    l, u, l_1_norm = get_normalized_l_u(leaves, model.post, 'sign', 'dirichlet')
+    l, u, l_1_norm = get_normalized_l_u(leaves, model.post, 'sign', distribution_name)
     if cur_PB_bound is None:
         if type(trainloader) == tuple:
             train_data = trainloader[1], model(trainloader[0])
@@ -101,17 +99,17 @@ def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, cur_PB_bound
             for _, batch in enumerate(trainloader):
                 train_data = batch[1], model(batch[0])
                 cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss))
-    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, 'dirichlet', model.a)
+    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, distribution_name, model.a)
 
-def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
+def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name):
     """
     Assigns small weights to predictors with medium weights, so that l and u might
         respectively be big and small.
     """
     best_alphas = model.get_post()
-    sorted_alphas = torch.sort(best_alphas.clone())[0]
+    sorted_alphas = torch.sort(torch.abs(best_alphas.clone()))[0]
     n_alphas = len(best_alphas)
-    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
+    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
     pbar = tqdm(range(12))
     low, up, strikes = 0, n_alphas-1, 0
     print(f"Current true-risk bound: {best_bound}.")
@@ -120,9 +118,9 @@ def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
             break
         mean = int((up + low) / 2)
         post = model.get_post().clone()
-        post[best_alphas <= sorted_alphas[mean]] = prior_coefficient
+        post[torch.abs(best_alphas) <= sorted_alphas[mean]] = prior_coefficient
         model.set_post(post)
-        cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
+        cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
         if cur_bound < best_bound:
             best_bound = cur_bound
             best_alphas = model.get_post()
@@ -137,13 +135,13 @@ def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient):
                 up = mean
     return model
 
-def manual_model_finetune(model, n, bound, trainloader, loss):
+def manual_model_finetune(model, n, bound, trainloader, loss, distribution_name):
     """
     Manually search for the best .
     """
     best_alphas = model.get_post()
     n_alphas = len(best_alphas)
-    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
+    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
     changed = True
     while changed:
         changed = False
@@ -158,7 +156,7 @@ def manual_model_finetune(model, n, bound, trainloader, loss):
                     post[i] = post[i] + (change == 'max') * factor - (change == 'min') * factor + 0.01 + torch.rand(1) * 0.001
                     model.set_post(post)
                     # And compute the resulting bound.
-                    cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss)
+                    cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
                     if cur_bound < best_bound:
                         best_bound = cur_bound
                         best_alphas = model.get_post()

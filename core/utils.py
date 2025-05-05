@@ -4,6 +4,7 @@ import random
 
 from betaincder import betainc, betaincderp, betaincderq
 from torch import lgamma, log1p, exp, log
+from torch.special import erf
 
 
 def updating_first_seed_results(seed_results, cfg, time, model, train_err, test_err, best_train_stats, bound_true_n_f):
@@ -40,6 +41,12 @@ def betaincderx(x, a, b):
     lbeta = lgamma(a) + lgamma(b) - lgamma(a + b)
     partial_x = exp((b - 1) * log1p(-x) + (a - 1) * log(x) - lbeta)
     return partial_x
+
+def Phi(z):
+    """
+    Computes the Phi function.
+    """
+    return 1 / 2 * (1 - erf(z / 2 ** 0.5))
 
 class BetaInc(torch.autograd.Function):
     """ regularized incomplete beta function and its forward and backward passes"""

@@ -1,10 +1,9 @@
 import torch
-import numpy as np
-
 from torch.distributions.dirichlet import Dirichlet as Dir
+from torch.distributions.multivariate_normal import MultivariateNormal as Gaus
 from torch import lgamma, digamma
 
-from core.utils import BetaInc
+from core.utils import BetaInc, Phi
 
 class Dirichlet():
 
@@ -74,6 +73,61 @@ class Dirichlet():
             return Dir(torch.exp(self.alpha)).entropy()
 
 
+class Gaussian():
+
+    def __init__(self, w, a, mc_draws=10):
+
+        self.w = w
+        self.mc_draws = mc_draws
+        self.a = a
+
+    # Kullback-Leibler divergence between two Dirichlets
+    def KL(self, beta):
+        return torch.sum((self.w - beta) ** 2)
+
+    def risk(self, batch, mean=True):
+        # 01-loss applied to batch
+        y_target, y_pred = batch
+        inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(self.w, (1, -1)) * y_pred, dim=1) - self.a) / torch.sum(y_pred ** 2, dim=1) ** 0.5
+
+        s = Phi(inner_Phi)
+
+        if mean:
+            return sum(s) / len(y_target)
+
+        return sum(s)
+
+    def approximated_risk(self, batch, loss, mean=True):
+
+        y_target, y_pred = batch
+
+        thetas = self.rsample()
+
+        r = loss(y_target, y_pred, thetas).mean(0)
+
+        if mean:
+            return r.mean()
+
+        return r.sum()
+
+    def rsample(self):
+
+        return Gaus(self.w).rsample((self.mc_draws,))
+
+    def mean(self):
+        return Categorical(self.w)
+
+    def mode(self):
+        return self.w
+
+    def entropy(self, of_mean=True):
+
+        if of_mean:
+            return self.mean().entropy()
+        else:
+            return Gaus(self.w).entropy()
+
+
 class Categorical():
 
     def __init__(self, theta, mc_draws=10):
@@ -133,5 +187,6 @@ class Categorical():
 
 distr_dict = {
     "dirichlet": Dirichlet,
+    "gaussian": Gaussian,
     "categorical": Categorical
 }

@@ -9,20 +9,25 @@ class MajorityVote(torch.nn.Module):
 
         super(MajorityVote, self).__init__()
         
-        if distr not in ["dirichlet", "categorical"]:
+        if distr not in ["dirichlet", "gaussian", "categorical"]:
             raise NotImplementedError
 
-        assert all(prior > 0), "all prior parameters must be positive"
         self.num_voters = len(prior)
+        if distr == "dirichlet":
+            assert all(prior > 0), "all prior parameters must be positive"
+            post = torch.rand(self.num_voters) * 2 + 1e-9  # uniform draws in (0, 2]
+            self.post = torch.nn.Parameter(torch.log(post), requires_grad=True)  # use log (and apply exp(post) later so that posterior parameters are always positive)
+        else:
+            post = torch.rand(self.num_voters) * 4 - 2  # uniform draws in [-2, 2]
+            self.post = torch.nn.Parameter(post, requires_grad=True)
 
         self.prior = prior
         self.voters = voters
         self.mc_draws = mc_draws
         self.a = a
         self.distr_type = distr
-        post = torch.rand(self.num_voters) * 2 + 1e-9 # uniform draws in (0, 2]
-        self.post = torch.nn.Parameter(torch.log(post), requires_grad=True)  # use log (and apply exp(post) later so that posterior parameters are always positive)
         self.distribution = distr_dict[distr](self.post, self.a, mc_draws)
+        self.distribution_name = distr
         self.kl_factor = kl_factor
 
     def forward(self, x):
@@ -72,22 +77,29 @@ class MajorityVote(torch.nn.Module):
         return self.kl_factor * self.distribution.KL(self.prior)
 
     def get_post(self):
-        return torch.exp(self.post)
+        if self.distribution_name == "dirichlet":
+            return torch.exp(self.post)
+        else:
+            return self.post * 1
 
     def get_post_grad(self):
         return self.post.grad
 
     def set_post(self, value):
 
-        assert all(value > 0), "all posterior parameters must be positive"
         assert len(value) == self.num_voters
          
         if self.distr_type == "categorical": # make sure params sum to 1
             value /= value.sum()
 
-        self.post = torch.nn.Parameter(torch.log(value), requires_grad=True) # use log (and apply exp(post) later so that posterior parameters are always positive)
+        if self.distribution_name == "dirichlet":
+            assert all(value > 0), "all posterior parameters must be positive"
+            self.post = torch.nn.Parameter(torch.log(value), requires_grad=True) # use log (and apply exp(post) later so that posterior parameters are always positive)
+            self.distribution.alpha = self.post
+        else:
+            self.post = torch.nn.Parameter(value, requires_grad=True)  # use log (and apply exp(post) later so that posterior parameters are always positive)
+            self.distribution.w = self.post
 
-        self.distribution.alpha = self.post
 
     def entropy(self):
         return self.distribution.entropy()

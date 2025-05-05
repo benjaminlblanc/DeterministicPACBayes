@@ -39,14 +39,15 @@ def main(cfg):
         ROOT_DIR /= f"MC={cfg.training.MC_draws}"
 
     print("results will be saved in:", ROOT_DIR.resolve())
+    distribution_name = cfg.training.distribution
 
     # define params for each method
     risks = { # type: (loss, bound_coeff, distribution_type, kl_factor)
-        "exact": (None, 1., "dirichlet", 1.),
-        "MC": (lambda x, y, z: sigmoid_loss(x, y, z, c=cfg.training.sigmoid_c), 1., "dirichlet", 1.),
-        "Rnd": (lambda x, y, z: rand_loss(x, y, z, n=cfg.training.rand_n), 2., "categorical", cfg.training.rand_n),
-        "FO": (lambda x, y, z: moment_loss(x, y, z, order=1), 2., "categorical", 1.),
-        "SO": (lambda x, y, z: moment_loss(x, y, z, order=2), 4., "categorical", 2.),
+        "exact": (None, 1., distribution_name, 1.),
+        "MC": (lambda x, y, z: sigmoid_loss(x, y, z, c=cfg.training.sigmoid_c), 1., distribution_name, 1.),
+        "Rnd": (lambda x, y, z: rand_loss(x, y, z, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n),
+        "FO": (lambda x, y, z: moment_loss(x, y, z, order=1), 2., distribution_name, 1.),
+        "SO": (lambda x, y, z: moment_loss(x, y, z, order=2), 4., distribution_name, 2.),
     }
 
     train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
@@ -143,18 +144,18 @@ def main(cfg):
 
             # First training phase
             *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
-            bound_true_no_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
+            bound_true_no_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
             # Results are compiled in the 'seed_results' dictionary
             seed_results = updating_first_seed_results(seed_results, cfg, time, model, train_error, test_error,
                                         best_train_stats, bound_true_no_finetune)
 
             # Cropping the weight of base predictors that barely have an effect on the prediction
-            model = crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient)
-            model = manual_model_finetune(model, n, bound, trainloader, loss)
+            model = crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name)
+            model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
             # Second training phase
             *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
-            bound_true_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
+            bound_true_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
             # Results are compiled in the 'seed_results' dictionary
             seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune, i)
 

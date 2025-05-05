@@ -1,8 +1,7 @@
 project_name: "DeterministicPACBayes"
-num_trials: 1
-num_trials: 5
+num_trials: 10
 num_workers: 8 # for dataloaders
-is_using_wandb: True
+is_using_wandb: False
 
 model:
   M: 10 # number of predictors, if stumps: 2*M per dimension
@@ -10,23 +9,31 @@ model:
   pred: "stumps-uniform"
   bootstrap: 0.5 # only for pred = rf
   tree_depth: None # only for pred = rf
+  a: 0
 
   # deprecated param: m always equal to 0.5
   m: 0.5 # for informed priors: use first m * N_train points to learn one prior, and last (1-m) * N_train to learn the other prior
   uniform: False
 
 training:
-  seed: 541714
+  seed: 541744
   lr: 0.1
   batch_size: 1024
   num_epochs: 100
   risk: "exact" # or MC, SO, FO, Rnd
+  distribution: "dirichlet"
   opt_bound: True # if False, optimize only risk
   sigmoid_c: 100 # only for MC
   rand_n: 100 # only for Rnd
   MC_draws: 10 # only for MC
 
 dataset: 'SVMGUIDE'
+
+#dataset:
+#  distr: moons
+#  noise: 0.05
+#  N_train: 1000 # number of training points per class
+#  N_test: 1000 # number of test points per class
 
 bound:
   delta: 0.05
