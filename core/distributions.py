@@ -42,21 +42,22 @@ class Dirichlet():
 
         y_target, y_pred = batch
 
-        thetas = self.rsample()
+        thetas = torch.exp(self.alpha) / torch.sum(torch.exp(self.alpha))
 
-        r = loss(y_target, y_pred, thetas).mean(0)
+        r = loss(y_target, y_pred, thetas)
 
         if mean:
             return r.mean()
 
         return r.sum()
 
+
     def rsample(self):
 
         return Dir(torch.exp(self.alpha)).rsample((self.mc_draws,))
 
     def mean(self):
-        return Categorical(self.alpha)
+        return Categorical(self.alpha, 0)
 
     def mode(self):
         assert all(self.alpha > 1), "can compute mode only of Dirichlet with alpha > 1"
@@ -101,9 +102,9 @@ class Gaussian():
 
         y_target, y_pred = batch
 
-        thetas = self.rsample()
+        thetas = self.w
 
-        r = loss(y_target, y_pred, thetas).mean(0)
+        r = loss(y_target, y_pred, thetas)
 
         if mean:
             return r.mean()
@@ -115,7 +116,7 @@ class Gaussian():
         return Gaus(self.w).rsample((self.mc_draws,))
 
     def mean(self):
-        return Categorical(self.w)
+        return Categorical(self.w, 0)
 
     def mode(self):
         return self.w
@@ -133,6 +134,7 @@ class Categorical():
     def __init__(self, theta, a, mc_draws=10):
         self.theta = theta
         self.mc_draws = mc_draws
+        self.a = a
         
     def KL(self, beta):
 

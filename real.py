@@ -15,7 +15,7 @@ from core.wandb_formatting import create_config_dico, create_run_name
 from core.bounds import BOUNDS
 from core.losses import sigmoid_loss, moment_loss, rand_loss
 from core.monitors import MonitorMV
-from core.utils import deterministic, updating_first_seed_results, updating_last_seed_results
+from core.utils import deterministic, updating_first_seed_results, updating_last_seed_results, whether_to_run_run
 from data.datasets import Dataset, TorchDataset
 from models.majority_vote import MultipleMajorityVote, MajorityVote
 from models.random_forest import two_forests
@@ -26,6 +26,8 @@ from optimization import stochastic_routine
 
 @hydra.main(config_path='config/real.yaml')
 def main(cfg):
+    whether_to_run_run(cfg)
+
     ROOT_DIR = f"{hydra.utils.get_original_cwd()}/results/{cfg.dataset}/{cfg.training.risk}/{cfg.bound.type}/optimize-bound={cfg.training.opt_bound}/stochastic-bound={cfg.bound.stochastic}/{cfg.model.pred}/M={cfg.model.M}/max-depth={cfg.model.tree_depth}/prior={cfg.model.prior}/"
 
     ROOT_DIR = Path(ROOT_DIR)
@@ -44,10 +46,9 @@ def main(cfg):
     # define params for each method
     risks = { # type: (loss, bound_coeff, distribution_type, kl_factor)
         "exact": (None, 1., distribution_name, 1.),
-        "MC": (lambda x, y, z: sigmoid_loss(x, y, z, c=cfg.training.sigmoid_c), 1., distribution_name, 1.),
-        "Rnd": (lambda x, y, z: rand_loss(x, y, z, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n),
         "FO": (lambda x, y, z: moment_loss(x, y, z, order=1), 2., distribution_name, 1.),
         "SO": (lambda x, y, z: moment_loss(x, y, z, order=2), 4., distribution_name, 2.),
+        "Rnd": (lambda x, y, z: rand_loss(x, y, z, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n),
     }
 
     train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
@@ -126,7 +127,7 @@ def main(cfg):
             prior_coefficient = 1 / M if cfg.model.prior == "adjusted" else int(cfg.model.prior)
 
             if cfg.model.pred == "rf":
-                betas = [torch.ones(M) * cfg.model.prior for p in predictors] # prior
+                betas = [torch.ones(M) * cfg.model.prior for _ in predictors] # prior
 
                 # weights proportional to data sizes
                 model = MultipleMajorityVote(predictors, betas, a, weights=(0.5, 0.5), mc_draws=cfg.training.MC_draws, distr=distr, kl_factor=kl_factor)
@@ -144,20 +145,24 @@ def main(cfg):
 
             # First training phase
             *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
-            bound_true_no_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
-            # Results are compiled in the 'seed_results' dictionary
-            seed_results = updating_first_seed_results(seed_results, cfg, time, model, train_error, test_error,
-                                        best_train_stats, bound_true_no_finetune)
+            if cfg.training.risk == "exact":
+                bound_true_no_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
+                # Results are compiled in the 'seed_results' dictionary
+                seed_results = updating_first_seed_results(seed_results, cfg, time, model, train_error, test_error, best_train_stats, bound_true_no_finetune)
+                # Cropping the weight of base predictors that barely have an effect on the prediction
+                model = crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name)
+                model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
-            # Cropping the weight of base predictors that barely have an effect on the prediction
-            model = crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name)
-            model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
-
-            # Second training phase
-            *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
-            bound_true_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
-            # Results are compiled in the 'seed_results' dictionary
-            seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune, i)
+                # Second training phase
+                *_, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
+                bound_true_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
+                # Results are compiled in the 'seed_results' dictionary
+                seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune, i)
+            else:
+                bound_true_no_finetune = best_train_stats[cfg.bound.type]
+                bound_true_with_finetune = best_train_stats[cfg.bound.type]
+                seed_results = updating_first_seed_results(seed_results, cfg, time, model, train_error, test_error, best_train_stats, bound_true_no_finetune)
+                seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, best_train_stats, bound_true_with_finetune, i)
 
             print(f"Prior results. Test error: {round(seed_results['test-error'], 4)};\t {cfg.bound.type}: {round(seed_results[cfg.bound.type], 4)};\t {cfg.bound.type}_true: {round(seed_results[cfg.bound.type+'_true_no_finetune'], 4)}.")
             print(f"Post. results. Test error: {round(seed_results['test-error_finetune'], 4)};\t {cfg.bound.type}: {round(seed_results[cfg.bound.type + '_finetune'], 4)};\t {cfg.bound.type}_true: {round(seed_results[cfg.bound.type + '_true_finetune'], 4)}.")

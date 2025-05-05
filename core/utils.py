@@ -7,6 +7,12 @@ from torch import lgamma, log1p, exp, log
 from torch.special import erf
 
 
+def whether_to_run_run(cfg):
+    if cfg.training.distribution in ["dirichlet", "categorical"]:
+        assert cfg.model.prior in ["adjusted", 1]
+    elif cfg.training.distribution == "gaussian":
+        assert cfg.model.prior == 0
+
 def updating_first_seed_results(seed_results, cfg, time, model, train_err, test_err, best_train_stats, bound_true_n_f):
     seed_results["train-error"] = train_err['error']
     seed_results["test-error"] = test_err['error']
