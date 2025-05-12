@@ -79,8 +79,7 @@ class MajorityVote(torch.nn.Module):
     def get_post(self):
         if self.distribution_name == "dirichlet":
             return torch.exp(self.post)
-        else:
-            return self.post * 1
+        return self.post * 1
 
     def get_post_grad(self):
         return self.post.grad
@@ -90,7 +89,6 @@ class MajorityVote(torch.nn.Module):
         assert len(value) == self.num_voters
          
         if self.distr_type == "categorical": # make sure params sum to 1
-            value /= value.sum()
             self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.theta = self.post
 

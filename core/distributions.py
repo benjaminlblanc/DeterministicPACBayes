@@ -179,7 +179,6 @@ class Categorical():
         return t.unsqueeze(0)
 
     def get_theta(self):
-        
         return torch.nn.functional.softmax(self.theta, dim=0)
 
     def entropy(self):

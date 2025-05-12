@@ -71,8 +71,8 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
         sum_2 = torch.sum(normalized_tree_weights[indices[1]])
         return torch.abs(sum_1 - sum_2), torch.sum(torch.abs(normalized_tree_weights)), None
     elif distribution == "categorical":
-        sum_1 = torch.sum(normalized_tree_weights[indices[0]])
-        sum_2 = torch.sum(normalized_tree_weights[indices[1]])
+        sum_1 = torch.sum(torch.nn.functional.softmax(normalized_tree_weights, dim=0).clone().detach()[indices[0]])
+        sum_2 = torch.sum(torch.nn.functional.softmax(normalized_tree_weights, dim=0).clone().detach()[indices[1]])
         biggest_sum = torch.max(sum_1, sum_2)
         smallest_sum = torch.min(sum_1, sum_2)
         return biggest_sum, biggest_sum + smallest_sum, None

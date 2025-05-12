@@ -125,7 +125,7 @@ def main(cfg):
             testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096, num_workers=cfg.num_workers, shuffle=False)
 
             prior_coefficient = 1 / M if cfg.model.prior == "adjusted" else int(cfg.model.prior)
-            prior_value = prior_coefficient if cfg.training.distribution == "categorical" else prior_coefficient
+            prior_value = -5 if cfg.training.distribution == "categorical" else prior_coefficient
 
             if cfg.model.pred == "rf":
                 betas = [torch.ones(M) * cfg.model.prior for _ in predictors] # prior
@@ -168,8 +168,7 @@ def main(cfg):
                 seed_results = updating_first_seed_results(seed_results, cfg, time, model, train_error, test_error, best_train_stats, deterministic_bound, ben_bound_no_finetune)
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
 
-            print(f"Prior results. Test error: {round(seed_results['test-error'], 4)};\t {cfg.bound.type}: {round(seed_results[cfg.bound.type], 4)};\t {cfg.bound.type}_true: {round(seed_results[cfg.bound.type+'_true_no_finetune'], 4)}.")
-            print(f"Post. results. Test error: {round(seed_results['test-error_finetune'], 4)};\t {cfg.bound.type}: {round(seed_results[cfg.bound.type + '_finetune'], 4)};\t {cfg.bound.type}_true: {round(seed_results[cfg.bound.type + '_true_finetune'], 4)}.")
+            print(f"Test error: {round(seed_results['test-error'], 4)};\t Deterministic: {round(best_train_stats[cfg.bound.type], 4)};\t Factor: {round(seed_results['factor_no_finetune'], 4)};\t Factor (finetuned): {round(seed_results['factor_with_finetune'], 4)}")
 
             # save seed results
             np.save(SAVE_DIR / "err-b.npy", seed_results)
@@ -184,7 +183,7 @@ def main(cfg):
         entropies.append(seed_results["entropy"])
         strengths.append(seed_results["strength"])
         kls.append(seed_results["KL"])
-        bounds.append(seed_results[cfg.bound.type])
+        bounds.append(seed_results["deterministic_bound"])
         times.append(seed_results["time"])
         train_losses.append(seed_results.pop("train-risk", None)) # available only for non-exact methods
 
