@@ -31,7 +31,7 @@ class Dirichlet():
         correct = torch.where(y_target == y_pred, exp_alpha, torch.zeros(1)).sum(1)
         wrong = torch.where(y_target != y_pred, exp_alpha, torch.zeros(1)).sum(1)
         
-        s = [BetaInc.apply(c, w, torch.tensor(0.5 + self.a / 2)) for c, w in zip(correct, wrong)]
+        s = [BetaInc.apply(c, w, torch.tensor(0.5 + self.a / 2), torch.tensor(1)) for c, w in zip(correct, wrong)]
 
         if mean:
             return sum(s) / len(y_target)
@@ -42,14 +42,14 @@ class Dirichlet():
 
         y_target, y_pred = batch
 
-        thetas = torch.exp(self.alpha) / torch.sum(torch.exp(self.alpha))
+        thetas = torch.exp(self.alpha)
 
         r = loss(y_target, y_pred, thetas)
 
         if mean:
-            return r.mean()
+            return sum(r) / len(y_target)
 
-        return r.sum()
+        return sum(r)
 
 
     def rsample(self):

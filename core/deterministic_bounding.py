@@ -9,7 +9,7 @@ def I(l, u, a):
     Computes the incomplete beta function.
     """
     c = torch.tensor((1 + a) / 2)
-    return BetaInc.apply(l, u, c)
+    return BetaInc.apply(l, u, c, torch.tensor(1))
 
 def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a):
     """
@@ -23,6 +23,8 @@ def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a
     elif distribution == "dirichlet":
         I_l, I_u = I(l_1_norm - l, l, a), I(u, l_1_norm - u, a)
         return (Gibbs_risk - I_u) / (I_l - I_u)
+    elif distribution == "categorical":
+        return (Gibbs_risk - (1 - u)) / (l - (1 - u))
 
 def get_indices(possible_values, sums):
     """
@@ -50,7 +52,9 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
     if leaf_type == 'sign':
         if distribution == 'dirichlet':
             possible_values = torch.exp(normalized_tree_weights.clone().detach()).numpy()
-        else:
+        elif distribution == 'categorical':
+            possible_values = torch.nn.functional.softmax(normalized_tree_weights, dim=0).clone().detach().numpy()
+        elif distribution == 'gaussian':
             possible_values = normalized_tree_weights.clone().detach().numpy()
     else:
         normalized_leaf_values = np.reshape(normalized_tree_weights, (-1, 1)) * leaf_values
@@ -66,6 +70,12 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
         sum_1 = torch.sum(normalized_tree_weights[indices[0]])
         sum_2 = torch.sum(normalized_tree_weights[indices[1]])
         return torch.abs(sum_1 - sum_2), torch.sum(torch.abs(normalized_tree_weights)), None
+    elif distribution == "categorical":
+        sum_1 = torch.sum(normalized_tree_weights[indices[0]])
+        sum_2 = torch.sum(normalized_tree_weights[indices[1]])
+        biggest_sum = torch.max(sum_1, sum_2)
+        smallest_sum = torch.min(sum_1, sum_2)
+        return biggest_sum, biggest_sum + smallest_sum, None
     elif distribution == "dirichlet":
         sum_1 = torch.sum(torch.exp(normalized_tree_weights[indices[0]]))
         sum_2 = torch.sum(torch.exp(normalized_tree_weights[indices[1]]))
@@ -89,7 +99,7 @@ def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution
     """
     leaves = np.ones((n_alphas, 2))
     leaves[:, 0] = -1
-    l, u, l_1_norm = get_normalized_l_u(leaves, model.post, 'sign', distribution_name)
+    l, u, l_1_norm = get_normalized_l_u(leaves, model.get_post(), 'sign', distribution_name)
     if cur_PB_bound is None:
         if type(trainloader) == tuple:
             train_data = trainloader[1], model(trainloader[0])

@@ -5,7 +5,7 @@ from core.distributions import distr_dict
 
 class MajorityVote(torch.nn.Module):
 
-    def __init__(self, voters, prior, a, mc_draws=10, distr="dirichlet", kl_factor=1.):
+    def __init__(self, voters, prior, a, distr="dirichlet", kl_factor=1.):
 
         super(MajorityVote, self).__init__()
         
@@ -23,10 +23,10 @@ class MajorityVote(torch.nn.Module):
 
         self.prior = prior
         self.voters = voters
-        self.mc_draws = mc_draws
+        self.mc_draws = 0
         self.a = a
         self.distr_type = distr
-        self.distribution = distr_dict[distr](self.post, self.a, mc_draws)
+        self.distribution = distr_dict[distr](self.post, self.a, 0)
         self.distribution_name = distr
         self.kl_factor = kl_factor
 
@@ -91,13 +91,16 @@ class MajorityVote(torch.nn.Module):
          
         if self.distr_type == "categorical": # make sure params sum to 1
             value /= value.sum()
+            self.post = torch.nn.Parameter(value, requires_grad=True)
+            self.distribution.theta = self.post
 
-        if self.distribution_name == "dirichlet":
+        elif self.distribution_name == "dirichlet":
             assert all(value > 0), "all posterior parameters must be positive"
             self.post = torch.nn.Parameter(torch.log(value), requires_grad=True) # use log (and apply exp(post) later so that posterior parameters are always positive)
             self.distribution.alpha = self.post
-        else:
-            self.post = torch.nn.Parameter(value, requires_grad=True)  # use log (and apply exp(post) later so that posterior parameters are always positive)
+
+        elif self.distribution_name == "gaussian":
+            self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.w = self.post
 
 
@@ -106,7 +109,7 @@ class MajorityVote(torch.nn.Module):
 
 class MultipleMajorityVote(torch.nn.Module):
 
-    def __init__(self, voter_sets, a, priors, weights, mc_draws=10, posteriors=None, distr="dirichlet",  kl_factor=1.):
+    def __init__(self, voter_sets, a, priors, weights, posteriors=None, distr="dirichlet",  kl_factor=1.):
 
         super(MultipleMajorityVote, self).__init__()
 
@@ -116,10 +119,10 @@ class MultipleMajorityVote(torch.nn.Module):
         if posteriors is not None:
             assert len(priors) == len(posteriors), "must specify same number of priors and posteriors"
 
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, mc_draws=mc_draws, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
+            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, mc_draws=0, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
 
         else:
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, mc_draws=mc_draws, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
+            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, mc_draws=0, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
 
         self.weights = weights
 

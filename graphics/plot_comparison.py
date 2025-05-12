@@ -8,7 +8,7 @@ def I(l, u):
     Computes the incomplete beta function.
     """
     c = torch.tensor(1 / 2)
-    return BetaInc.apply(l, u, c)
+    return BetaInc.apply(l, u, c, 1)
 
 def deterministic_bound(Gibbs_risk, l, u, l_1_norm, distribution):
     """

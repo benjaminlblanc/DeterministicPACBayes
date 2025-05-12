@@ -10,9 +10,6 @@ model:
   bootstrap: 0.5 # only for pred = rf
   tree_depth: None # only for pred = rf
   a: 0
-
-  # deprecated param: m always equal to 0.5
-  m: 0.5 # for informed priors: use first m * N_train points to learn one prior, and last (1-m) * N_train to learn the other prior
   uniform: False
 
 training:
@@ -20,8 +17,8 @@ training:
   lr: 0.1
   batch_size: 1024
   num_epochs: 100
-  risk: "exact" # or MC, SO, FO, Rnd
-  distribution: "dirichlet"
+  risk: "FO" # FO, SO, Bin
+  distribution: "dirichlet" # "dirichlet", "gaussian", "categorical"
   opt_bound: True # if False, optimize only risk
   sigmoid_c: 100 # only for MC
   rand_n: 100 # only for Rnd
