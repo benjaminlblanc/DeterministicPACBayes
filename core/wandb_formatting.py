@@ -13,6 +13,7 @@ def create_config_dico(cfg):
             'M': cfg['model']['M'],
             'prior': cfg['model']['prior'],
             'pred': cfg['model']['pred'],
+            'stump_init': cfg['model']['stump_init'],
             'bootstrap': cfg['model']['bootstrap'],
             'tree_depth': cfg['model']['tree_depth'],
             'uniform': cfg['model']['uniform'],
@@ -35,4 +36,4 @@ def create_run_name(config):
     Given a dictionary of config, returns a run name.
     """
     return 'dataset=' + config['dataset'] + '_distr=' + config['distribution'] + '_risk=' + config['risk'] + '_pred-type=' + \
-           config['pred'] + '_M=' + str(config['M']) + '_prior=' + str(config['prior']) + '_seed=' + str(config['seed'])
+           config['pred'] + '_stump-init=' + str(config['stump_init']) + '_M=' + str(config['M']) + '_prior=' + str(config['prior']) + '_seed=' + str(config['seed'])

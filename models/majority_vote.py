@@ -107,7 +107,7 @@ class MajorityVote(torch.nn.Module):
 
 class MultipleMajorityVote(torch.nn.Module):
 
-    def __init__(self, voter_sets, a, priors, weights, posteriors=None, distr="dirichlet",  kl_factor=1.):
+    def __init__(self, voter_sets, priors, a, weights, posteriors=None, distr="dirichlet",  kl_factor=1.):
 
         super(MultipleMajorityVote, self).__init__()
 
@@ -117,12 +117,14 @@ class MultipleMajorityVote(torch.nn.Module):
         if posteriors is not None:
             assert len(priors) == len(posteriors), "must specify same number of priors and posteriors"
 
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, mc_draws=0, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
+            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
 
         else:
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, mc_draws=0, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
+            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
 
         self.weights = weights
+        self.a = a
+        self.distribution_name = distr
 
     def forward(self, xs):
 
@@ -152,15 +154,15 @@ class MultipleMajorityVote(torch.nn.Module):
         return sum([w * mv.KL() for mv, w in zip(self.mvs, self.weights)])
 
     def get_post(self):
-        return torch.cat([mv.post for mv in self.mvs], 0)
+        return torch.cat([mv.get_post() for mv in self.mvs], 0)
 
     def get_post_grad(self):
         return torch.cat([mv.post.grad for mv in self.mvs], 0)
 
     def set_post(self, value):
-
-        for mv in self.mvs:
-            mv.set_post(value)
+        value = torch.reshape(value, (len(self.mvs), -1))
+        for i in range(len(self.mvs)):
+            self.mvs[i].set_post(value[i])
 
     def entropy(self):
 

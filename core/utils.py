@@ -10,13 +10,20 @@ from torch.special import erf
 def whether_to_run_run(cfg):
     if cfg.training.distribution in "dirichlet":
         assert cfg.model.prior in ["adjusted", 1]
+        assert cfg.model.stump_init == "ones"
     elif cfg.training.distribution in "categorical":
         assert cfg.model.prior == "adjusted"
+        assert cfg.model.stump_init == "rand"
     elif cfg.training.distribution == "gaussian":
         assert cfg.model.prior == 0
+        assert cfg.model.stump_init == "rand"
+    if cfg.training.risk != "Bin":
+        assert cfg.training.rand_n == 0
+    else:
+        assert cfg.training.rand_n > 0
 
 
-def updating_first_seed_results(seed_results, cfg, time, model, train_err, test_err, best_train_stats, deterministic_bound, ben_bound_no_finetune):
+def updating_first_seed_results(seed_results, time, model, train_err, test_err, best_train_stats, deterministic_bound, ben_bound_no_finetune):
     seed_results["train-error"] = train_err['error']
     seed_results["test-error"] = test_err['error']
     seed_results["train-risk"] = best_train_stats["error"]
@@ -29,6 +36,8 @@ def updating_first_seed_results(seed_results, cfg, time, model, train_err, test_
     seed_results["entropy"] = model.entropy().item()
     if ben_bound_no_finetune != 1:
         seed_results["factor_no_finetune"] = ben_bound_no_finetune / deterministic_bound * 2
+    else:
+        seed_results["factor_no_finetune"] = 0
     return seed_results
 
 def updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i):
@@ -38,6 +47,8 @@ def updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_b
     seed_results["ben_bound_with_finetune"] = ben_bound_with_finetune
     if ben_bound_with_finetune != 1:
         seed_results["factor_with_finetune"] = ben_bound_with_finetune / seed_results["deterministic_bound"] * 2
+    else:
+        seed_results["factor_with_finetune"] = 0
     return seed_results
 
 def deterministic(random_state):

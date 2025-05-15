@@ -5,26 +5,26 @@ is_using_wandb: False
 
 model:
   M: 10 # number of predictors, if stumps: 2*M per dimension
-  prior: "adjusted" # param of the Dirichlet prior
-  pred: "stumps-uniform"
+  prior: "adjusted" # param of the distribution prior
+  pred: "stumps-uniform" # stumps-uniform, rf
+  stump_init: "ones" # ones, rand
   bootstrap: 0.5 # only for pred = rf
   tree_depth: None # only for pred = rf
   a: 0
   uniform: False
 
 training:
-  seed: 541744
+  seed: 541944
   lr: 0.1
   batch_size: 1024
   num_epochs: 100
   risk: "FO" # FO, SO, Bin
   distribution: "dirichlet" # "dirichlet", "gaussian", "categorical"
   opt_bound: True # if False, optimize only risk
-  sigmoid_c: 100 # only for MC
-  rand_n: 100 # only for Rnd
-  MC_draws: 10 # only for MC
+  rand_n: 0 # only for Bin
 
-dataset: 'SVMGUIDE'
+
+dataset: 'MUSH'
 
 #dataset:
 #  distr: moons

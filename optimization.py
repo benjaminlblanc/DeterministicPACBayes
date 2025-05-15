@@ -72,19 +72,16 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
     last_iter = epoch * len(dataloaders[0])
     train_obj = 0.
 
-    pbar = tqdm(range(len(dataloaders[0])))
+    pbar = range(len(dataloaders[0]))
 
     for i, *batches in zip(pbar, *dataloaders):
-        # import pdb; pdb.set_trace()
-
         X = [batch[0] for batch in batches]
         # sum sizes of loaders
         n = sum(map(len, X))
         pred = model(X)
         data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-        # import pdb; pdb.set_trace()
         optimizer.zero_grad()
-        n_alphas = len(model.post)
+        n_alphas = len(model.get_post())
 
         if bound is not None:
             if true_risk_bounding:
@@ -96,8 +93,6 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
             cost = model.risk(data, loss)
 
         train_obj += cost.item()
-
-        pbar.set_description("avg train obj %f" % (train_obj / (i + 1)))
         cost.backward()
         optimizer.step()
 
@@ -169,7 +164,6 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
 
     best_bound = float("inf")
     best_model = deepcopy(model)
-    best_e = -1
     no_improv = 0
     best_train_stats = {bound_type: None}
 
@@ -192,7 +186,6 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
         if train_stats[bound_type] < best_bound:
             best_bound = train_stats[bound_type]
             best_train_stats = train_stats
-            best_e = e
             best_model = deepcopy(model)
             no_improv = 0
 

@@ -6,11 +6,14 @@ import numpy as np
 def stumps_predict(x, thresholds, signs):
     return (signs * (1 - 2*(x[..., None] > thresholds))).reshape((len(x), -1))
 
-def uniform_decision_stumps(M, d, min_v, max_v):
+def uniform_decision_stumps(M, d, min_v, max_v, initialization):
     
     thresholds = torch.from_numpy(np.linspace(min_v, max_v, M, endpoint=False, axis=-1)).float() # get M evenly spaced thresholds in the interval [min_v, max_v] per dimension
 
-    sigs = torch.ones((d, M * 2))
+    if initialization == 'ones':
+        sigs = torch.ones((d, M * 2))
+    elif initialization == 'rand':
+        sigs = torch.rand((d, M * 2))
     sigs[..., M:] = -1 # first M*d stumps return one class, last M*d return the other
 
     stumps = lambda x: stumps_predict(x, torch.cat((thresholds, thresholds), 1), sigs)

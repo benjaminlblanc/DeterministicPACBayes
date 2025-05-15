@@ -78,7 +78,7 @@ def main(cfg):
                 data = Dataset(cfg.dataset, normalize=True, data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
 
             if cfg.model.pred == "stumps-uniform":
-                predictors, M = uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0))
+                predictors, M = uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0), cfg.model.stump_init)
 
             elif cfg.model.pred == "rf": # random forest
 
@@ -128,7 +128,7 @@ def main(cfg):
             prior_value = -5 if cfg.training.distribution == "categorical" else prior_coefficient
 
             if cfg.model.pred == "rf":
-                betas = [torch.ones(M) * cfg.model.prior for _ in predictors] # prior
+                betas = [torch.ones(M) * prior_coefficient for _ in predictors] # prior
 
                 # weights proportional to data sizes
                 model = MultipleMajorityVote(predictors, betas, a, weights=(0.5, 0.5), distr=distr, kl_factor=kl_factor)
@@ -138,7 +138,6 @@ def main(cfg):
 
                 model = MajorityVote(predictors, betas, a, distr=distr, kl_factor=kl_factor)
 
-            n_alphas = len(model.post)
             monitor = MonitorMV(SAVE_DIR)
             optimizer = Adam(model.parameters(), lr=cfg.training.lr)
             # init learning rate scheduler
@@ -147,11 +146,11 @@ def main(cfg):
             # First training phase
             model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
             if cfg.training.risk == "FO":
-                ben_bound_no_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
+                ben_bound_no_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
                 deterministic_bound = best_train_stats[cfg.bound.type] * 2
 
                 # Results are compiled in the 'seed_results' dictionary
-                seed_results = updating_first_seed_results(seed_results, cfg, time, model, train_error, test_error, best_train_stats, deterministic_bound, ben_bound_no_finetune)
+                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, best_train_stats, deterministic_bound, ben_bound_no_finetune)
 
                 # Cropping the weight of base predictors that barely have an effect on the prediction
                 model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
@@ -159,13 +158,13 @@ def main(cfg):
 
                 # Second training phase
                 model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
-                ben_bound_with_finetune = compute_det_bound(model, bound, n, n_alphas, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
+                ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
             else:
                 deterministic_bound, ben_bound_no_finetune, ben_bound_with_finetune = best_train_stats[cfg.bound.type], 1, 1
-                seed_results = updating_first_seed_results(seed_results, cfg, time, model, train_error, test_error, best_train_stats, deterministic_bound, ben_bound_no_finetune)
+                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, best_train_stats, deterministic_bound, ben_bound_no_finetune)
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
 
             print(f"Test error: {round(seed_results['test-error'], 4)};\t Deterministic: {round(best_train_stats[cfg.bound.type], 4)};\t Factor: {round(seed_results['factor_no_finetune'], 4)};\t Factor (finetuned): {round(seed_results['factor_with_finetune'], 4)}")
