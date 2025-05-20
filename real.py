@@ -153,11 +153,12 @@ def main(cfg):
                 seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, best_train_stats, deterministic_bound, ben_bound_no_finetune)
 
                 # Cropping the weight of base predictors that barely have an effect on the prediction
-                model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
-                model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
+                if seed_results["factor_no_finetune"] < 2:
+                    model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
+                    model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
-                # Second training phase
-                model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
+                    # Second training phase
+                    model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
                 ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
 
                 # Results are compiled in the 'seed_results' dictionary

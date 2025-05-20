@@ -65,8 +65,17 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
             possible_values.append((max(normalized_leaf_values[i])-min(normalized_leaf_values[i])) / 2)
             remainder += (max(normalized_leaf_values[i])+min(normalized_leaf_values[i])) / 2
         possible_values.append(remainder)
-    sums = prtpy.partition(algorithm=prtpy.partitioning.ilp, numbins=2, items=np.sort(possible_values),
-                           objective=prtpy.obj.MaximizeSmallestSum)
+    if np.max(possible_values) > np.sum(possible_values) - np.max(possible_values):
+        possible = possible_values.copy()
+        possible = np.delete(possible, np.argmax(possible_values))
+        sums = [[np.max(possible_values)], list(possible)]
+    else:
+        try:
+            sums = prtpy.partition(algorithm=prtpy.partitioning.ilp, numbins=2, items=np.sort(possible_values),
+                                   objective=prtpy.obj.MaximizeSmallestSum)
+        except ValueError:
+            sums = [[1], [1]]
+            possible_values = np.array([1, 1])
     indices = get_indices(possible_values.copy(), sums)
     if distribution == "gaussian":
         sum_1 = torch.sum(normalized_tree_weights[indices[0]])
@@ -170,24 +179,27 @@ def manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
     changed = True
     while changed:
         changed = False
-        pbar = tqdm(range(len(best_alphas)))
+        rang, factor = [], torch.max(model.get_post()) / 100
+        for i in range(len(best_alphas)):
+            if best_alphas[i] >= factor:
+                rang.append(i)
+        np.random.shuffle(rang)
+        pbar = tqdm(rang[:min(100, len(rang))])
         print(f"Current true-risk bound: {best_bound}.")
         for i in pbar:
-            factor = torch.max(model.get_post()) / 100
-            if best_alphas[i] >= factor:
-                for change in ['min', 'max']:
-                    # We slightly modify the current weighting
+            for change in ['min', 'max']:
+                # We slightly modify the current weighting
+                post = model.get_post()
+                post[i] = post[i] + (change == 'max') * factor - (change == 'min') * factor + 0.01 + torch.rand(1) * 0.001
+                model.set_post(post)
+                # And compute the resulting bound.
+                cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
+                if cur_bound < best_bound - 1e-4:
+                    best_bound = cur_bound
+                    best_alphas = model.get_post()
+                    changed = True
+                else:
                     post = model.get_post()
-                    post[i] = post[i] + (change == 'max') * factor - (change == 'min') * factor + 0.01 + torch.rand(1) * 0.001
+                    post[i] = best_alphas[i]
                     model.set_post(post)
-                    # And compute the resulting bound.
-                    cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
-                    if cur_bound < best_bound - 1e-4:
-                        best_bound = cur_bound
-                        best_alphas = model.get_post()
-                        changed = True
-                    else:
-                        post = model.get_post()
-                        post[i] = best_alphas[i]
-                        model.set_post(post)
     return model
