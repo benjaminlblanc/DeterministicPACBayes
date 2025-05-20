@@ -53,10 +53,11 @@ def main(cfg):
     train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
     for i in range(cfg.num_trials):
 
-        print("seed", cfg.training.seed+i)
-        deterministic(cfg.training.seed+i)
+        current_seed = cfg.training.seed + i
+        print("seed", current_seed)
+        deterministic(current_seed)
 
-        SAVE_DIR = ROOT_DIR / f"seed={cfg.training.seed+i}"
+        SAVE_DIR = ROOT_DIR / f"seed={current_seed}"
         SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
         if (SAVE_DIR / "err-b.npy").is_file():
@@ -66,7 +67,7 @@ def main(cfg):
 
         else:
             config = create_config_dico(cfg)
-            run_name = create_run_name(config)
+            run_name = create_run_name(config, current_seed)
             if cfg.is_using_wandb:
                 wandb.init(name=str(run_name), project=cfg.project_name, config=config)
 

@@ -31,9 +31,9 @@ def create_config_dico(cfg):
             'stochastic':  cfg['bound']['stochastic']}
     return dico
 
-def create_run_name(config):
+def create_run_name(config, seed):
     """
     Given a dictionary of config, returns a run name.
     """
     return 'dataset=' + config['dataset'] + '_distr=' + config['distribution'] + '_risk=' + config['risk'] + '_pred-type=' + \
-           config['pred'] + '_stump-init=' + str(config['stump_init']) + '_M=' + str(config['M']) + '_prior=' + str(config['prior']) + '_seed=' + str(config['seed'])
+           config['pred'] + '_stump-init=' + str(config['stump_init']) + '_M=' + str(config['M']) + '_prior=' + str(config['prior']) + '_seed=' + str(seed)
