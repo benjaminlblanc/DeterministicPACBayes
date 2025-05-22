@@ -96,8 +96,8 @@ def main(cfg):
             loss, coeff, distr, kl_factor, div = risks[cfg.training.risk]
             a = cfg.model.a
             delta = cfg.bound.delta
-            if cfg.training.risk == 'Dis_Renyi':
-                delta /= 5
+            if cfg.training.risk in ['Dis_Renyi', 'Dis_KL']:
+                delta /= cfg.bound.n_grid
 
             bound = None
             if cfg.training.opt_bound:

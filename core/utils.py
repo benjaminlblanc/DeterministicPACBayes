@@ -23,9 +23,7 @@ def whether_to_run_run(cfg):
         if cfg.training.risk == "Dis_Renyi":
             assert 1 < cfg.bound.order < 2
 
-    if cfg.training.risk != "Bin":
-        assert cfg.training.rand_n == 0
-    else:
+    if cfg.training.risk == "Bin":
         assert cfg.training.rand_n > 0
 
 
