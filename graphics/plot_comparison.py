@@ -8,7 +8,7 @@ def I(l, u):
     Computes the incomplete beta function.
     """
     c = torch.tensor(1 / 2)
-    return BetaInc.apply(l, u, c, 1)
+    return BetaInc.apply(l, u, c, torch.tensor(1))
 
 def deterministic_bound(Gibbs_risk, l, u, l_1_norm, distribution):
     """
@@ -57,6 +57,6 @@ plt.plot(x, gaussian, ls='--', c='green')
 plt.legend(['Categorical', 'Dirichlet', 'Gaussian', 'n = $|\mathbf{w}|$ = 10', 'n = $|\mathbf{w}|$ = 100'])
 
 plt.title('Deterministic bounding factor as a function of $\min_{\mathbf{x}} |\mathbf{w}\cdot\mathbf{f}(\mathbf{x})|$ \n when $d(\cdot, h_w) = 0$')
-plt.ylabel('DBF')
+plt.ylabel('Deterministic bounding factor')
 plt.xlabel('$\min_{\mathbf{x}} |\mathbf{w}\cdot\mathbf{f}(\mathbf{x})|$')
 plt.show()
