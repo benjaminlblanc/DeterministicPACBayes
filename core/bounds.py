@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 from core.kl_inv import klInvFunction
 from models.majority_vote import MultipleMajorityVote

@@ -2,7 +2,9 @@ import math
 
 import torch
 from torch.distributions.dirichlet import Dirichlet as Dir
+from torch.distributions.categorical import Categorical as Cat
 from torch.distributions.multivariate_normal import MultivariateNormal as Gaus
+
 from torch import lgamma, digamma
 
 from core.utils import BetaInc, Phi
@@ -75,7 +77,7 @@ class Dirichlet():
 
     def rsample(self):
 
-        return Dir(torch.exp(self.alpha)).rsample((self.mc_draws,))
+        return Dir(torch.exp(self.alpha)).rsample()
 
     def mean(self):
         return Categorical(self.alpha, 0)
@@ -144,7 +146,7 @@ class Gaussian():
 
     def rsample(self):
 
-        return Gaus(self.w).rsample((self.mc_draws,))
+        return Gaus(self.w, torch.eye(len(self.w))).rsample()
 
     def mean(self):
         return Categorical(self.w, 0)
@@ -218,9 +220,7 @@ class Categorical():
 
     def rsample(self):
 
-        t = self.get_theta()
-
-        return t.unsqueeze(0)
+        return Cat(self.get_theta()).rsample()
 
     def get_theta(self):
         return torch.nn.functional.softmax(self.theta, dim=0)

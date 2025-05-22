@@ -150,7 +150,7 @@ def main(cfg):
             lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
 
             # First training phase
-            model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
+            model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
             if cfg.training.risk == "FO":
                 ben_bound_no_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
                 deterministic_bound = best_train_stats[cfg.bound.type] * 2
@@ -164,7 +164,7 @@ def main(cfg):
                     model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
                     # Second training phase
-                    model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
+                    model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
                 ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
 
                 # Results are compiled in the 'seed_results' dictionary

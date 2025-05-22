@@ -50,28 +50,6 @@ class MajorityVote(torch.nn.Module):
 
         return l.mean(1)
 
-    def predict(self, X):
-        
-        thetas = self.distribution.rsample()
-        y_pred = self(X).transpose(1, 0).float()
-
-        labels = thetas @ y_pred
-
-        # TODO: prediction for multiclass but not one-hot encoded
-        if y_pred.dim() == 3:
-            num_classes = labels.shape[2]
-            c_min, c_max = 0, num_classes - 1
-            labels = torch.argmax(labels, 2) # if multiclass
-
-        else:
-            num_classes = 2
-            c_min, c_max = -1, 1
-            labels = torch.sign(labels) # if binary
-
-        pred = torch.stack([torch.histc(l, bins=num_classes, min=c_min, max=c_max) / self.mc_draws for l in labels.T])
-
-        return pred 
-
     def KL(self):
 
         return self.kl_factor * self.distribution.KL(self.prior)
@@ -108,9 +86,12 @@ class MajorityVote(torch.nn.Module):
             self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.w = self.post
 
-
     def entropy(self):
         return self.distribution.entropy()
+
+    def random_new_params(self):
+        value = self.distribution.rsample()
+        self.set_post(value)
 
 class MultipleMajorityVote(torch.nn.Module):
 
@@ -151,10 +132,6 @@ class MultipleMajorityVote(torch.nn.Module):
         l = torch.stack([w * sum(mv.voter_strength(batch)) for mv, w, batch in zip(self.mvs, self.weights, batchs)])
 
         return l
-
-    def predict(self, X):
-        
-        return sum([w * mv.predict(X) for mv, w in zip(self.mvs, self.weights)])
 
     def KL(self):
 

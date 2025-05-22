@@ -1,6 +1,7 @@
 from copy import deepcopy
 from time import time
 from tqdm import tqdm
+import torch
 
 from core.deterministic_bounding import compute_det_bound
 from models.majority_vote import MultipleMajorityVote
@@ -159,7 +160,7 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
     return total_metrics
 
 
-def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, loss=None, monitor=None,
+def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, risk_type, loss=None, monitor=None,
                        num_epochs=100, lr_scheduler=None, true_risk_bounding=False):
 
     best_bound = float("inf")
@@ -201,7 +202,18 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     t2 = time()
 
     train_error = val_routine(trainloader, best_model)
-    test_error = test_routine(testloader, best_model)
+
+    if risk_type in ['Dis_Renyi', 'Dis_KL']:
+        test_errors = []
+        for i in range(100):
+            model_to_try = deepcopy(best_model)
+            model_to_try.random_new_params()
+            test_errors.append(test_routine(testloader, model_to_try)['error'])
+        test_error = {'error': torch.mean(torch.tensor(test_errors)).item(),
+                      'error_std': torch.std(torch.tensor(test_errors)).item()}
+    else:
+        test_error = val_routine(testloader, best_model)
+        test_error['error_std'] = 0
 
     print(f"Test error: {test_error['error']}; {bound_type} bound: {best_train_stats[bound_type]}\n")
 
