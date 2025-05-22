@@ -1,9 +1,14 @@
+import math
+
 import torch
 from torch.distributions.dirichlet import Dirichlet as Dir
 from torch.distributions.multivariate_normal import MultivariateNormal as Gaus
 from torch import lgamma, digamma
 
 from core.utils import BetaInc, Phi
+
+def log_Beta(vec):
+    return lgamma(vec).sum() - lgamma(vec.sum())
 
 class Dirichlet():
 
@@ -17,9 +22,25 @@ class Dirichlet():
     def KL(self, beta):
 
         exp_alpha = torch.exp(self.alpha)
-        res = lgamma(exp_alpha.sum()) - lgamma(exp_alpha).sum()
-        res -= lgamma(beta.sum()) - lgamma(beta).sum()
+        res = log_Beta(beta) - log_Beta(exp_alpha)
         res += torch.sum((exp_alpha - beta) * (digamma(exp_alpha) - digamma(exp_alpha.sum())))
+
+        return res
+
+    def Renyi(self, beta, order):
+
+        exp_alpha = torch.exp(self.alpha)
+        res = log_Beta(beta)
+        res -= order / (order - 1) * log_Beta(exp_alpha)
+        res += (1 / (order - 1)) * (log_Beta(order * exp_alpha + (1 - order) * beta) - log_Beta(exp_alpha))
+
+        return res
+
+    def KL_dis(self, beta):
+
+        exp_alpha = torch.exp(self.alpha)
+        res = Dir(exp_alpha).log_prob(exp_alpha)
+        res -= Dir(beta).log_prob(beta)
 
         return res
 
@@ -82,9 +103,19 @@ class Gaussian():
         self.mc_draws = mc_draws
         self.a = a
 
-    # Kullback-Leibler divergence between two Dirichlets
+    # Kullback-Leibler divergence between two Gaussian
     def KL(self, beta):
-        return torch.sum((self.w - beta) ** 2)
+        return torch.sum((self.w - beta) ** 2 / 2)
+
+    def Renyi(self, beta, order):
+        return order * self.KL(beta)
+
+    def KL_dis(self, beta):
+
+        res = Gaus(self.w, torch.eye(len(self.w))).log_prob(self.w)
+        res -= Gaus(beta, torch.eye(len(beta))).log_prob(beta)
+
+        return res
 
     def risk(self, batch, mean=True):
         # 01-loss applied to batch
@@ -143,6 +174,19 @@ class Categorical():
         b = beta / beta.sum()
 
         return (t * torch.log(t / b)).sum()
+
+    def Renyi(self, beta, order):
+        t = self.get_theta()
+
+        b = beta / beta.sum()
+        return (1 / (order - 1)) * torch.log((t ** order / b ** (order - 1)).sum())
+
+    def KL_dis(self, beta):
+        t = self.get_theta()
+
+        b = beta / beta.sum()
+
+        return (torch.log(t) - torch.log(b)).sum()
 
     def approximated_risk(self, batch, loss, mean=True):
 

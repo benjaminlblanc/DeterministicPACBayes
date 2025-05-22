@@ -44,10 +44,12 @@ def main(cfg):
     distribution_name = cfg.training.distribution
 
     # define params for each method
-    risks = { # type: (loss, bound_coeff, distribution_type, kl_factor)
-        "FO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1.),  # The "2" factor is taken care of later
-        "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=2), 4., distribution_name, 2.),
-        "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n),
+    risks = { # type: (loss, bound_coeff, distribution_type, kl_factor, div)
+        "FO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
+        "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=2), 4., distribution_name, 2., 'KL'),
+        "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
+        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'Renyi'),
+        "Dis_KL": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'KL_dis'),
     }
 
     train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
@@ -91,8 +93,11 @@ def main(cfg):
             else:
                 raise NotImplementedError("model.pred should be one the following: [stumps-uniform, rf]")
 
-            loss, coeff, distr, kl_factor = risks[cfg.training.risk]
+            loss, coeff, distr, kl_factor, div = risks[cfg.training.risk]
             a = cfg.model.a
+            delta = cfg.bound.delta
+            if cfg.training.risk == 'Dis_Renyi':
+                delta /= 5
 
             bound = None
             if cfg.training.opt_bound:
@@ -102,12 +107,12 @@ def main(cfg):
                 if cfg.bound.stochastic:
 
                     print("Evaluate bound regularizations over mini-batch")
-                    bound = lambda n, model, risk: BOUNDS[cfg.bound.type](n, model, risk, delta=cfg.bound.delta, coeff=coeff)
+                    bound = lambda n, model, risk: BOUNDS[cfg.bound.type](n, model, risk, delta, div, coeff, cfg.bound.order)
 
                 else:
                     print("Evaluate bound regularizations over whole training set")
                     n = len(data.X_train)
-                    bound = lambda _, model, risk: BOUNDS[cfg.bound.type](n, model, risk, delta=cfg.bound.delta, coeff=coeff)
+                    bound = lambda _, model, risk: BOUNDS[cfg.bound.type](n, model, risk, delta, div, coeff, cfg.bound.order)
 
             if cfg.model.pred == "rf": # a loader per posterior
 

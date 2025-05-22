@@ -76,6 +76,13 @@ class MajorityVote(torch.nn.Module):
 
         return self.kl_factor * self.distribution.KL(self.prior)
 
+    def Renyi(self, order):
+
+        return self.distribution.Renyi(self.prior, order)
+
+    def KL_dis(self):
+        return self.distribution.KL_dis(self.prior)
+
     def get_post(self):
         if self.distribution_name == "dirichlet":
             return torch.exp(self.post)
@@ -152,6 +159,14 @@ class MultipleMajorityVote(torch.nn.Module):
     def KL(self):
 
         return sum([w * mv.KL() for mv, w in zip(self.mvs, self.weights)])
+
+    def Renyi(self, order):
+
+        return sum([w * mv.Renyi(order) for mv, w in zip(self.mvs, self.weights)])
+
+    def KL_dis(self):
+
+        return sum([w * mv.KL_dis() for mv, w in zip(self.mvs, self.weights)])
 
     def get_post(self):
         return torch.cat([mv.get_post() for mv in self.mvs], 0)

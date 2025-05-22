@@ -79,7 +79,7 @@ def generate_latex_table(results):
     print(
         f"{last_dataset} & {FO} $\pm$ {FO_std} & {SO} $\pm$ {SO_std} & {Bin} $\pm$ {Bin_std} & {Ben} $\pm$ {Ben_std}\\\ ")
 
-file = 'wandb_export_2025-05-21T17_17_50.339-04_00.csv'
+file = 'wandb_export_2025-05-22T09_49_29.224-04_00.csv'
 hyperparams = ['M', 'batch_size', 'bootstrap', 'dataset', 'delta', 'distribution', 'is_using_wandb', 'lr',
                'num_epochs', 'num_trials', 'num_workers', 'opt_bound', 'pred', 'prior', 'project_name', 'rand_n',
                'risk', 'seed', 'stochastic', 'stump_init', 'tree_depth', 'type', 'uniform']

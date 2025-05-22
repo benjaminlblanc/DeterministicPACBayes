@@ -1,7 +1,9 @@
 import numpy as np
+import torch
 
 from core.kl_inv import klInvFunction
 from models.majority_vote import MultipleMajorityVote
+
 
 def mcallester_bound(n, model, risk, delta, coeff=1, verbose=False, monitor=None):
 
@@ -26,9 +28,14 @@ def mcallester_bound(n, model, risk, delta, coeff=1, verbose=False, monitor=None
 
     return bound 
 
-def seeger_bound(n, model, risk, delta, coeff=1, verbose=False, monitor=None):
+def seeger_bound(n, model, risk, delta, div, coeff=1, order=None, verbose=False, monitor=None):
 
-    kl = model.KL()
+    if div == 'KL':
+        kl = model.KL()
+    elif div == 'Renyi':
+        kl = model.Renyi(order)
+    elif div == 'KL_dis':
+        kl = model.KL_dis()
 
     if isinstance(model, MultipleMajorityVote): # informed priors
         
@@ -36,7 +43,10 @@ def seeger_bound(n, model, risk, delta, coeff=1, verbose=False, monitor=None):
         kl *= 2
 
     else:
-        const = np.log(2 * (n**0.5) / delta)
+        if div == 'Renyi':
+            const = (2 * order - 1) / (order - 1) * np.log(2 / delta) + np.log(2 * n**0.5)
+        else:
+            const = np.log(2 * (n**0.5) / delta)
 
     bound = coeff * klInvFunction.apply(risk, (kl + const) / n)
 
