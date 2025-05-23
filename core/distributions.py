@@ -1,13 +1,10 @@
-import math
-
 import torch
 from torch.distributions.dirichlet import Dirichlet as Dir
 from torch.distributions.categorical import Categorical as Cat
 from torch.distributions.multivariate_normal import MultivariateNormal as Gaus
-
 from torch import lgamma, digamma
-
 from core.utils import BetaInc, Phi
+
 
 def log_Beta(vec):
     return lgamma(vec).sum() - lgamma(vec.sum())
@@ -89,13 +86,6 @@ class Dirichlet():
 
         return exp_alpha / exp_alpha.sum()
 
-    def entropy(self, of_mean=True):
-
-        if of_mean:
-            return self.mean().entropy()
-        else:
-            return Dir(torch.exp(self.alpha)).entropy()
-
 
 class Gaussian():
 
@@ -153,13 +143,6 @@ class Gaussian():
 
     def mode(self):
         return self.w
-
-    def entropy(self, of_mean=True):
-
-        if of_mean:
-            return self.mean().entropy()
-        else:
-            return Gaus(self.w).entropy()
 
 
 class Categorical():
@@ -225,10 +208,6 @@ class Categorical():
     def get_theta(self):
         return torch.nn.functional.softmax(self.theta, dim=0)
 
-    def entropy(self):
-
-        theta = self.get_theta()
-        return - torch.sum(theta * torch.log(theta))
 
 distr_dict = {
     "dirichlet": Dirichlet,

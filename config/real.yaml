@@ -5,9 +5,9 @@ is_using_wandb: False
 
 model:
   M: 10 # number of predictors, if stumps: 2*M per dimension
-  prior: "adjusted" # param of the distribution prior
+  prior: 0 # param of the distribution prior
   pred: "stumps-uniform" # stumps-uniform, rf
-  stump_init: "ones" # ones, rand
+  stump_init: "rand" # ones, rand
   bootstrap: 0.5 # only for pred = rf
   tree_depth: None # only for pred = rf
   a: 0
@@ -18,13 +18,13 @@ training:
   lr: 0.1
   batch_size: 1024
   num_epochs: 100
-  risk: "FO" # FO, SO, Bin
-  distribution: "dirichlet" # "dirichlet", "gaussian", "categorical"
+  risk: "Dis_Renyi" # FO, SO, Bin, Dis_Renyi, Dis_KL
+  distribution: "gaussian" # "dirichlet", "gaussian", "categorical"
   opt_bound: True # if False, optimize only risk
   rand_n: 0 # only for Bin
 
 
-dataset: 'MUSH'
+dataset: 'SVMGUIDE'
 
 #dataset:
 #  distr: moons
@@ -36,3 +36,5 @@ bound:
   delta: 0.05
   type: "seeger"
   stochastic: False
+  order: 1.5
+  n_grid: 5

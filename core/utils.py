@@ -39,7 +39,6 @@ def updating_first_seed_results(seed_results, time, model, train_err, test_err, 
     seed_results["posterior"] = model.get_post().detach().numpy()
     seed_results["strength"] = best_train_stats["strength"]
     seed_results["KL"] = model.KL().item()
-    seed_results["entropy"] = model.entropy().item()
     if ben_bound_no_finetune != 1:
         seed_results["factor_no_finetune"] = ben_bound_no_finetune / deterministic_bound * 2
     else:

@@ -86,9 +86,6 @@ class MajorityVote(torch.nn.Module):
             self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.w = self.post
 
-    def entropy(self):
-        return self.distribution.entropy()
-
     def random_new_params(self):
         value = self.distribution.rsample()
         self.set_post(value)
@@ -155,7 +152,3 @@ class MultipleMajorityVote(torch.nn.Module):
         value = torch.reshape(value, (len(self.mvs), -1))
         for i in range(len(self.mvs)):
             self.mvs[i].set_post(value[i])
-
-    def entropy(self):
-
-        return sum([w * mv.entropy() for mv, w in zip(self.mvs, self.weights)])
