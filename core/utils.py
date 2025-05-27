@@ -28,16 +28,17 @@ def whether_to_run_run(cfg):
 
 
 
-def updating_first_seed_results(seed_results, time, model, train_err, test_err, best_train_stats, deterministic_bound, ben_bound_no_finetune):
+def updating_first_seed_results(seed_results, time, model, train_err, test_err, deterministic_bound, final_bound, ben_bound_no_finetune):
     seed_results["train-error"] = train_err['error']
     seed_results["test-error"] = test_err['error']
-    seed_results["test-error_std"] = test_err['error_std']
-    seed_results["train-risk"] = best_train_stats["error"]
+    seed_results["test-error_sampled"] = test_err['error_sampled']
+    seed_results["test-error_sampled_std"] = test_err['error_sampled_std']
     seed_results["deterministic_bound"] = deterministic_bound
+    seed_results["deterministic_bound_sampled"] = final_bound["bound_sampled"]
+    seed_results["deterministic_bound_sampled_std"] = final_bound["bound_sampled_std"]
     seed_results["ben_bound_no_finetune"] = ben_bound_no_finetune
     seed_results["time"] = time
     seed_results["posterior"] = model.get_post().detach().numpy()
-    seed_results["strength"] = best_train_stats["strength"]
     seed_results["KL"] = model.KL().item()
     if ben_bound_no_finetune != 1:
         seed_results["factor_no_finetune"] = ben_bound_no_finetune / deterministic_bound * 2
@@ -49,7 +50,6 @@ def updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_b
     seed_results["seed"] = cfg.training.seed+i
     seed_results["train-error_finetune"] = train_error['error']
     seed_results["test-error_finetune"] = test_error['error']
-    seed_results["test-error_std_finetune"] = test_error['error_std']
     seed_results["ben_bound_with_finetune"] = ben_bound_with_finetune
     if ben_bound_with_finetune != 1:
         seed_results["factor_with_finetune"] = ben_bound_with_finetune / seed_results["deterministic_bound"] * 2

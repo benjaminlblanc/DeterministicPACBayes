@@ -104,6 +104,33 @@ def get_bound_on_pred_norm(leaf_values, func):
         tot += func(leaf_values[i])
     return tot ** 0.5
 
+
+def compute_bound(model, bound, n, trainloader, loss, sample):
+    """
+    Pipeline for computing the deterministic bound.
+    """
+    if type(trainloader) == tuple:
+        train_data = trainloader[1], model(trainloader[0])
+        cur_PB_bound = bound(n, model, model.risk(train_data, loss), sample)
+    elif type(trainloader) == DataLoader:
+        cur_PB_bound = 0
+        for _, batch in enumerate(trainloader):
+            train_data = batch[1], model(batch[0])
+            cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss), sample)
+    elif type(trainloader[0]) == tuple:
+        cur_PB_bound = bound(n, model, model.risk(trainloader, loss), sample)
+    elif type(trainloader) == list:
+        cur_PB_bound = 0
+        pbar = range(len(trainloader[0]))
+        for i, *batches in zip(pbar, *trainloader):
+            X = [batch[0] for batch in batches]
+            # sum sizes of loaders
+            n = sum(map(len, X))
+            pred = model(X)
+            data = [(batches[i][1], pred[i]) for i in range(len(batches))]
+            cur_PB_bound += (len(data[0][0]) * 2 / n) * bound(n, model, model.risk(data, loss), sample)
+    return cur_PB_bound
+
 def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name, cur_PB_bound=None):
     """
     Pipeline for computing the deterministic bound.
@@ -112,26 +139,7 @@ def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution
     leaves[:, 0] = -1
     l, u, l_1_norm = get_normalized_l_u(leaves, model.get_post(), 'sign', distribution_name)
     if cur_PB_bound is None:
-        if type(trainloader) == tuple:
-            train_data = trainloader[1], model(trainloader[0])
-            cur_PB_bound = bound(n, model, model.risk(train_data, loss))
-        elif type(trainloader) == DataLoader:
-            cur_PB_bound = 0
-            for _, batch in enumerate(trainloader):
-                train_data = batch[1], model(batch[0])
-                cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss))
-        elif type(trainloader[0]) == tuple:
-            cur_PB_bound = bound(n, model, model.risk(trainloader, loss))
-        elif type(trainloader) == list:
-            cur_PB_bound = 0
-            pbar = range(len(trainloader[0]))
-            for i, *batches in zip(pbar, *trainloader):
-                X = [batch[0] for batch in batches]
-                # sum sizes of loaders
-                n = sum(map(len, X))
-                pred = model(X)
-                data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-                cur_PB_bound += (len(data[0][0]) * 2 / n) * bound(n, model, model.risk(data, loss))
+        cur_PB_bound = compute_bound(model, bound, n, trainloader, loss, False)
     return deterministic_bound(cur_PB_bound, l, u, l_1_norm, leaves, distribution_name, model.a)
 
 def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name):

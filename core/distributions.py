@@ -1,7 +1,7 @@
 import torch
 from torch.distributions.dirichlet import Dirichlet as Dir
-from torch.distributions.categorical import Categorical as Cat
 from torch.distributions.multivariate_normal import MultivariateNormal as Gaus
+import torch.nn.functional as F
 from torch import lgamma, digamma
 from core.utils import BetaInc, Phi
 
@@ -38,8 +38,8 @@ class Dirichlet():
     def KL_dis(self, beta):
 
         exp_alpha = torch.exp(self.alpha)
-        res = Dir(exp_alpha).log_prob(exp_alpha)
-        res -= Dir(beta).log_prob(beta)
+        res = Dir(exp_alpha).log_prob(exp_alpha / exp_alpha.sum())
+        res -= Dir(beta).log_prob(beta / beta.sum())
 
         return res
 
@@ -168,10 +168,12 @@ class Categorical():
 
     def KL_dis(self, beta):
         t = self.get_theta()
+        assert (t ** 2).sum() == 1, 'To use KL_dis() on the Categorical distribution, the distribution must be centered on a one-hot vector.'
 
         b = beta / beta.sum()
-
-        return (torch.log(t) - torch.log(b)).sum()
+        for i in range(len(t)):
+            if t[i] == 1:
+                return -torch.log(b[i])
 
     def approximated_risk(self, batch, loss, mean=True):
 
@@ -203,7 +205,12 @@ class Categorical():
 
     def rsample(self):
 
-        return Cat(self.get_theta()).rsample()
+        cum_pro = torch.cumsum(self.get_theta(), dim=0)
+        cum_pro = torch.hstack((torch.zeros(1), cum_pro))
+        value = torch.rand(1)
+        for i in range(len(self.get_theta())):
+            if cum_pro[i] <= value <= cum_pro[i+1]:
+                return F.one_hot(torch.tensor(i), num_classes=len(self.get_theta())).to(torch.float64) * 20
 
     def get_theta(self):
         return torch.nn.functional.softmax(self.theta, dim=0)

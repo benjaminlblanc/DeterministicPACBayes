@@ -86,8 +86,10 @@ class MajorityVote(torch.nn.Module):
             self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.w = self.post
 
-    def random_new_params(self):
+    def random_draw_new_post(self):
         value = self.distribution.rsample()
+        if self.distribution_name == "dirichlet":
+            value *= self.prior.sum()
         self.set_post(value)
 
 class MultipleMajorityVote(torch.nn.Module):
@@ -152,3 +154,7 @@ class MultipleMajorityVote(torch.nn.Module):
         value = torch.reshape(value, (len(self.mvs), -1))
         for i in range(len(self.mvs)):
             self.mvs[i].set_post(value[i])
+
+    def random_draw_new_post(self):
+        for i in range(len(self.mvs)):
+            self.mvs[i].random_draw_new_post()

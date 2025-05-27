@@ -49,7 +49,6 @@ def main(cfg):
         "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=2), 4., distribution_name, 2., 'KL'),
         "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
         "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'Renyi'),
-        "Dis_KL": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'KL_dis'),
     }
 
     train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
@@ -107,12 +106,12 @@ def main(cfg):
                 if cfg.bound.stochastic:
 
                     print("Evaluate bound regularizations over mini-batch")
-                    bound = lambda n, model, risk: BOUNDS[cfg.bound.type](n, model, risk, delta, div, coeff, cfg.bound.order)
+                    bound = lambda n, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, coeff, cfg.bound.order)
 
                 else:
                     print("Evaluate bound regularizations over whole training set")
                     n = len(data.X_train)
-                    bound = lambda _, model, risk: BOUNDS[cfg.bound.type](n, model, risk, delta, div, coeff, cfg.bound.order)
+                    bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, coeff, cfg.bound.order)
 
             if cfg.model.pred == "rf": # a loader per posterior
 
@@ -150,13 +149,13 @@ def main(cfg):
             lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
 
             # First training phase
-            model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
+            model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
             if cfg.training.risk == "FO":
-                ben_bound_no_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
-                deterministic_bound = best_train_stats[cfg.bound.type] * 2
+                ben_bound_no_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
+                deterministic_bound = final_bound['bound'] * 2
 
                 # Results are compiled in the 'seed_results' dictionary
-                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, best_train_stats, deterministic_bound, ben_bound_no_finetune)
+                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)
 
                 # Cropping the weight of base predictors that barely have an effect on the prediction
                 if seed_results["factor_no_finetune"] < 2:
@@ -164,17 +163,17 @@ def main(cfg):
                     model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
                     # Second training phase
-                    model, _, best_train_stats, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
-                ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=best_train_stats[cfg.bound.type]).item()
+                    model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
+                ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
             else:
-                deterministic_bound, ben_bound_no_finetune, ben_bound_with_finetune = best_train_stats[cfg.bound.type], 1, 1
-                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, best_train_stats, deterministic_bound, ben_bound_no_finetune)
+                deterministic_bound, ben_bound_no_finetune, ben_bound_with_finetune = final_bound['bound'], 1, 1
+                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
 
-            print(f"Test error: {round(seed_results['test-error'], 4)};\t Deterministic: {round(best_train_stats[cfg.bound.type], 4)};\t Factor: {round(seed_results['factor_no_finetune'], 4)};\t Factor (finetuned): {round(seed_results['factor_with_finetune'], 4)}")
+            print(f"Test error: {round(seed_results['test-error'], 4)};\t Deterministic: {round(final_bound['bound'], 4)};\t Factor: {round(seed_results['factor_no_finetune'], 4)};\t Factor (finetuned): {round(seed_results['factor_with_finetune'], 4)}")
 
             # save seed results
             np.save(SAVE_DIR / "err-b.npy", seed_results)
@@ -186,14 +185,11 @@ def main(cfg):
 
         train_errors.append(seed_results["train-error"])
         test_errors.append(seed_results["test-error"])
-        entropies.append(seed_results["entropy"])
-        strengths.append(seed_results["strength"])
         kls.append(seed_results["KL"])
         bounds.append(seed_results["deterministic_bound"])
         times.append(seed_results["time"])
-        train_losses.append(seed_results.pop("train-risk", None)) # available only for non-exact methods
 
-    results = {"train-error": (np.mean(train_errors), np.std(train_errors)),"test-error": (np.mean(test_errors), np.std(test_errors)), cfg.bound.type: (np.mean(bounds), np.std(bounds)), "time": (np.mean(times), np.std(times)), "strength": (np.mean(strengths), np.std(strengths)), "train-risk": (np.mean(train_losses), np.std(train_losses)), "entropy": (np.mean(entropies), np.std(entropies)), "KL": (np.mean(kls), np.std(kls))}
+    results = {"train-error": (np.mean(train_errors), np.std(train_errors)),"test-error": (np.mean(test_errors), np.std(test_errors)), cfg.bound.type: (np.mean(bounds), np.std(bounds)), "time": (np.mean(times), np.std(times)), "KL": (np.mean(kls), np.std(kls))}
 
     np.save(ROOT_DIR / "err-b.npy", results)
 
