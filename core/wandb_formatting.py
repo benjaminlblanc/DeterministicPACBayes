@@ -28,7 +28,8 @@ def create_config_dico(cfg):
             'dataset': dataset_name,
             'delta': cfg['bound']['delta'],
             'type':  cfg['bound']['type'],
-            'stochastic':  cfg['bound']['stochastic']}
+            'stochastic':  cfg['bound']['stochastic'],
+            'order':  cfg['bound']['order']}
     return dico
 
 def create_run_name(config, seed):
