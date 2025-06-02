@@ -152,7 +152,10 @@ def main(cfg):
             model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
             if cfg.training.risk == "FO":
                 ben_bound_no_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
-                deterministic_bound = final_bound['bound'] * 2
+                if cfg.training.distribution == 'categorical':
+                    deterministic_bound = final_bound['bound'] * 2
+                else:
+                    deterministic_bound = 1
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)

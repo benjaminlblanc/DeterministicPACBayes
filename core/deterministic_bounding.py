@@ -54,6 +54,8 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
     if leaf_type == 'sign':
         if distribution == 'dirichlet':
             possible_values = torch.exp(normalized_tree_weights.clone().detach()).numpy()
+            if np.max(possible_values) == np.inf:
+                return 100, 100, 100
         elif distribution == 'categorical':
             possible_values = torch.nn.functional.softmax(normalized_tree_weights, dim=0).clone().detach().numpy()
         elif distribution == 'gaussian':
