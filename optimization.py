@@ -152,7 +152,7 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
     if bounds is not None:
 
         for k in bounds.keys():
-            total_metrics[k] = bounds[k](n, model, risk).item()
+            total_metrics[k] = bounds[k](n, model, risk, False).item()
 
     if monitor:
         monitor.write(epoch, **{tag: total_metrics})

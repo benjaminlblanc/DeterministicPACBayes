@@ -1,9 +1,9 @@
-name=Test
+name=DeterministicPACBayes
 wandb=True
 prd=rf
 m=100
 trials=5
-seed=0
+seed=541944
 
 for d in SENSORLESS PROTEIN PENDIGITS SHUTTLE MNIST FASHION
 do
