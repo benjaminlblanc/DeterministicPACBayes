@@ -40,8 +40,8 @@ def updating_first_seed_results(seed_results, time, model, train_err, test_err, 
     seed_results["time"] = time
     seed_results["posterior"] = model.get_post().detach().numpy()
     seed_results["KL"] = model.KL().item()
-    if ben_bound_no_finetune != 1:
-        seed_results["factor_no_finetune"] = ben_bound_no_finetune / deterministic_bound * 2
+    if ben_bound_no_finetune != 2:
+        seed_results["factor_no_finetune"] = ben_bound_no_finetune / final_bound['bound']
     else:
         seed_results["factor_no_finetune"] = 0
     return seed_results
@@ -51,8 +51,8 @@ def updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_b
     seed_results["train-error_finetune"] = train_error['error']
     seed_results["test-error_finetune"] = test_error['error']
     seed_results["ben_bound_with_finetune"] = ben_bound_with_finetune
-    if ben_bound_with_finetune != 1:
-        seed_results["factor_with_finetune"] = ben_bound_with_finetune / seed_results["deterministic_bound"] * 2
+    if ben_bound_with_finetune != 2:
+        seed_results["factor_with_finetune"] = ben_bound_with_finetune / (seed_results["ben_bound_no_finetune"] / seed_results["factor_no_finetune"])
     else:
         seed_results["factor_with_finetune"] = 0
     return seed_results

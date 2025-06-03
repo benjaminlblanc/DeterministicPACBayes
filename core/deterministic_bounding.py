@@ -122,7 +122,7 @@ def compute_bound(model, bound, n, trainloader, loss, sample):
     elif type(trainloader[0]) == tuple:
         cur_PB_bound = bound(n, model, model.risk(trainloader, loss), sample)
     elif type(trainloader) == list:
-        cur_PB_bound = 0
+        cur_PB_bound, count = 0, 0
         pbar = range(len(trainloader[0]))
         for i, *batches in zip(pbar, *trainloader):
             X = [batch[0] for batch in batches]
@@ -130,7 +130,9 @@ def compute_bound(model, bound, n, trainloader, loss, sample):
             n = sum(map(len, X))
             pred = model(X)
             data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-            cur_PB_bound += (len(data[0][0]) * 2 / n) * bound(n, model, model.risk(data, loss), sample)
+            cur_PB_bound += len(data[0][0]) * bound(n, model, model.risk(data, loss), sample)
+            count += len(data[0][0])
+        cur_PB_bound /= count
     return cur_PB_bound
 
 def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name, cur_PB_bound=None):
