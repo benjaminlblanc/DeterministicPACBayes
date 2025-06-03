@@ -202,7 +202,7 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     t2 = time()
 
     train_error = val_routine(trainloader, best_model)
-    test_error = val_routine(testloader, best_model)
+    test_error = test_routine(testloader, best_model)
     final_bound = {'bound': best_bound}
 
     if risk_type in ['FO', 'Dis_Renyi']:

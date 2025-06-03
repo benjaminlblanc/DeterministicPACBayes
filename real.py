@@ -155,7 +155,7 @@ def main(cfg):
                 if cfg.training.distribution == 'categorical':
                     deterministic_bound = final_bound['bound'] * 2
                 else:
-                    deterministic_bound = 1
+                    deterministic_bound = 2
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)
@@ -172,7 +172,7 @@ def main(cfg):
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
             else:
-                deterministic_bound, ben_bound_no_finetune, ben_bound_with_finetune = final_bound['bound'], 1, 1
+                deterministic_bound, ben_bound_no_finetune, ben_bound_with_finetune = final_bound['bound'], 2, 2
                 seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
 

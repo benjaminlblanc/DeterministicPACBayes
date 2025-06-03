@@ -52,6 +52,9 @@ def csv_to_latex(file_name, hyperparameters, numerical_results, last_distinction
     df_best_with_info.sort_values(by=final_distinction + numerical_results + numerical_results_y)
 
     # Finally, we generate the latex table
+    #for i in range(len(df_best_with_info.columns)):
+    #    print(i, df_best_with_info.columns[i])
+    #print(df_best_with_info)
     generate_latex_table(np.array(df_best_with_info))
 
 def generate_latex_table(results):
@@ -98,7 +101,7 @@ def generate_latex_table(results):
             Dis_Renyi_err_std = np.round(results[i][9] * 100, 1)
     print(f"{last_dataset} & {FO} $\pm$ {FO_std} & {FO_err} $\pm$ {FO_err_std} & {SO} $\pm$ {SO_std} & {SO_err} $\pm$ {SO_err_std} & {Bin} $\pm$ {Bin_std} & {Bin_err} $\pm$ {Bin_err_std} & {Dis_Renyi} $\pm$ {Dis_Renyi_std} & {Dis_Renyi_err} $\pm$ {Dis_Renyi_err_std} & {Dis_KL} $\pm$ {Dis_KL_std} & {Dis_KL_err} $\pm$ {Dis_KL_err_std} & {Ben} $\pm$ {Ben_std} & {Ben_err} $\pm$ {Ben_err_std} \\\ ")
 
-file = 'wandb_export_2025-05-23T10_47_43.825-04_00.csv'
+file = 'wandb_export_2025-06-03T08_09_31.778-04_00.csv'
 hyperparams = ['M', 'batch_size', 'bootstrap', 'dataset', 'delta', 'distribution', 'is_using_wandb', 'lr',
                'num_epochs', 'num_trials', 'num_workers', 'opt_bound', 'pred', 'prior', 'project_name', 'rand_n',
                'risk', 'stochastic', 'stump_init', 'type', 'uniform']
