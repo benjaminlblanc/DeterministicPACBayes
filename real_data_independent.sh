@@ -17,8 +17,8 @@ do
 
 	for r in SO
   do
-    #python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=dirichlet model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=ones training.seed=$seed
-    #python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=gaussian model.prior=0 training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=rand training.seed=$seed
+    python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=dirichlet model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=ones training.seed=$seed
+    python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=gaussian model.prior=0 training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=rand training.seed=$seed
     python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=rand training.seed=$seed
 	done
 
@@ -26,8 +26,8 @@ do
   do
     for r_n in 10 100
     do
-      #python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=dirichlet model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=ones training.rand_n=$r_n training.seed=$seed
-      #python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=gaussian model.prior=0 training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=rand training.rand_n=$r_n training.seed=$seed
+      python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=dirichlet model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=ones training.rand_n=$r_n training.seed=$seed
+      python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=gaussian model.prior=0 training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=rand training.rand_n=$r_n training.seed=$seed
       python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=rand training.rand_n=$r_n training.seed=$seed
     done
 	done
