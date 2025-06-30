@@ -52,7 +52,6 @@ class Dirichlet():
         wrong = torch.where(y_target != y_pred, exp_alpha, torch.zeros(1)).sum(1)
         
         s = [BetaInc.apply(c, w, torch.tensor(0.5 + self.a / 2), torch.tensor(1)) for c, w in zip(correct, wrong)]
-
         if mean:
             return sum(s) / len(y_target)
 
@@ -115,11 +114,11 @@ class Gaussian():
         inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(self.w, (1, -1)) * y_pred, dim=1) - self.a) / torch.sum(y_pred ** 2, dim=1) ** 0.5
 
         s = Phi(inner_Phi)
-
         if mean:
             return sum(s) / len(y_target)
 
         return sum(s)
+
 
     def approximated_risk(self, batch, loss, mean=True):
 
@@ -130,9 +129,9 @@ class Gaussian():
         r = loss(y_target, y_pred, thetas)
 
         if mean:
-            return r.mean()
+            return sum(r) / len(r)
 
-        return r.sum()
+        return sum(r)
 
     def rsample(self):
 

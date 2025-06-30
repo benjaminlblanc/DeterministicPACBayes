@@ -15,7 +15,8 @@ from core.wandb_formatting import create_config_dico, create_run_name
 from core.bounds import BOUNDS
 from core.losses import moment_loss, bin_loss
 from core.monitors import MonitorMV
-from core.utils import deterministic, updating_first_seed_results, updating_last_seed_results, whether_to_run_run
+from core.utils import deterministic, updating_first_seed_results, updating_last_seed_results, whether_to_run_run, \
+    get_n_classes
 from data.datasets import Dataset, TorchDataset
 from models.majority_vote import MultipleMajorityVote, MajorityVote
 from models.random_forest import two_forests
@@ -44,11 +45,12 @@ def main(cfg):
     distribution_name = cfg.training.distribution
 
     # define params for each method
+    n_classes = get_n_classes(cfg.dataset)
     risks = { # type: (loss, bound_coeff, distribution_type, kl_factor, div)
-        "FO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
-        "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=2), 4., distribution_name, 2., 'KL'),
-        "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
-        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'Renyi'),
+        "FO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
+        "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=2), 4., distribution_name, 2., 'KL'),
+        "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n_classes, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
+        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'Renyi'),
     }
 
     train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
@@ -114,6 +116,9 @@ def main(cfg):
                     bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, coeff, cfg.bound.order)
 
             if cfg.model.pred == "rf": # a loader per posterior
+
+                data.X_train = data.X_train[:1000]
+                data.y_train = data.y_train[:1000]
 
                 m_train = len(data.X_train) // 2
                 train1 = TorchDataset(data.X_train[m_train:], data.y_train[m_train:])
