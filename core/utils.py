@@ -205,7 +205,7 @@ class MultinormalCDF(torch.autograd.Function):
     @staticmethod
     def forward(ctx, one_hot_y_pred, purged_mu, purged_Sigma):
         ctx.save_for_backward(one_hot_y_pred, purged_mu, purged_Sigma)
-        return torch.tensor(multivariate_normal.cdf(torch.zeros(len(purged_mu)), purged_mu, purged_Sigma, abseps=1e-2, releps=1e-2), dtype=torch.float32)
+        return torch.tensor(1 - multivariate_normal.cdf(torch.zeros(len(purged_mu)), purged_mu, purged_Sigma, abseps=1e-2, releps=1e-2), dtype=torch.float32)
 
     @staticmethod
     def backward(ctx, grad):

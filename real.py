@@ -117,9 +117,9 @@ def main(cfg):
 
             if cfg.model.pred == "rf": # a loader per posterior
 
-                data.X_train = data.X_train[:1000]
-                data.y_train = data.y_train[:1000]
-                #n = 200
+                data.X_train = data.X_train[:10000]
+                data.y_train = data.y_train[:10000]
+                n = 10000
 
                 m_train = len(data.X_train) // 2
                 train1 = TorchDataset(data.X_train[m_train:], data.y_train[m_train:])
