@@ -166,7 +166,7 @@ def create_notable_idx(unique_idx):
             elif j == len_unique_idx:
                 return notable_idx
 
-def purge_normal(y_pred_minus_y_i, mu, Sigma):
+def purge_redundant_variables(y_pred_minus_y_i, mu, Sigma):
     y_preds_minus_y_i, mus, Sigmas = [], [], []
     for j in range(Sigma.shape[0]):
         diagonal_Sigma = torch.diag(Sigma[j])
@@ -194,7 +194,7 @@ def multinomial_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
             one_hot_y_pred = value_to_one_hot(y_pred[y_target_is_i], n_classes)
             mu, y_pred_minus_y_i = create_mu(theta, one_hot_y_pred, i)
             Sigma = create_Sigma(one_hot_y_pred, i)
-            purged_y_pred_minus_y_i, purged_mu, purged_Sigma = purge_normal(y_pred_minus_y_i, mu, Sigma)
+            purged_y_pred_minus_y_i, purged_mu, purged_Sigma = purge_redundant_variables(y_pred_minus_y_i, mu, Sigma)
             for j in range(len(mu)):
                 cdfs.append(MultinormalCDF.apply(purged_y_pred_minus_y_i[j], purged_mu[j], purged_Sigma[j]) ** order.item())
     return cdfs

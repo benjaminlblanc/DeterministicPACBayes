@@ -117,8 +117,8 @@ def main(cfg):
 
             if cfg.model.pred == "rf": # a loader per posterior
 
-                data.X_train = data.X_train[:1000]
-                data.y_train = data.y_train[:1000]
+                data.X_train = data.X_train[:10000]
+                data.y_train = data.y_train[:10000]
 
                 m_train = len(data.X_train) // 2
                 train1 = TorchDataset(data.X_train[m_train:], data.y_train[m_train:])
@@ -156,7 +156,10 @@ def main(cfg):
             # First training phase
             model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
             if cfg.training.risk == "FO":
-                ben_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
+                if cfg.training.distribution == "gaussian" and n_classes > 2:
+                    ben_bound_no_finetune = 1
+                else:
+                    ben_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
                 if cfg.training.distribution == 'categorical':
                     deterministic_bound = final_bound['bound'] * 2
                 else:
@@ -172,7 +175,10 @@ def main(cfg):
 
                     # Second training phase
                     model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
-                ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
+                if cfg.training.distribution == "gaussian" and n_classes > 2:
+                    ben_bound_with_finetune = 1
+                else:
+                    ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
