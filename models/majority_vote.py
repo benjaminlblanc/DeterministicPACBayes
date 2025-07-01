@@ -27,7 +27,10 @@ class MajorityVote(torch.nn.Module):
         self.a = a
         self.n_classes = n_classes
         self.distr_type = distr
-        self.distribution = distr_dict[distr](self.post, self.a, self.n_classes, 0)
+        if distr == "gaussian":
+            self.distribution = distr_dict[distr](self.post, self.a, self.n_classes, 0)
+        else:
+            self.distribution = distr_dict[distr](self.post, self.a, 0)
         self.distribution_name = distr
         self.kl_factor = kl_factor
 
