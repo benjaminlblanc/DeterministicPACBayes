@@ -116,12 +116,12 @@ class Gaussian():
             inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(self.w, (1, -1)) * y_pred, dim=1)) / torch.sum(y_pred ** 2, dim=1) ** 0.5
             s = Phi(inner_Phi)
         else:
-            s = multinomial_cdf_precomputations(y_pred, y_target, self.w, self.n_classes, 1)
+            s = multinomial_cdf_precomputations(y_pred, y_target, self.w, self.n_classes, torch.tensor(1))
 
         if mean:
-            return torch.tensor(sum(s)) / len(y_target)
+            return sum(s) / len(y_target)
 
-        return torch.tensor(sum(s))
+        return sum(s)
 
 
     def approximated_risk(self, batch, loss, mean=True):

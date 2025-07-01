@@ -117,8 +117,9 @@ def main(cfg):
 
             if cfg.model.pred == "rf": # a loader per posterior
 
-                data.X_train = data.X_train[:10000]
-                data.y_train = data.y_train[:10000]
+                data.X_train = data.X_train[:1000]
+                data.y_train = data.y_train[:1000]
+                #n = 200
 
                 m_train = len(data.X_train) // 2
                 train1 = TorchDataset(data.X_train[m_train:], data.y_train[m_train:])
@@ -141,12 +142,12 @@ def main(cfg):
                 betas = [torch.ones(M) * prior_coefficient for _ in predictors] # prior
 
                 # weights proportional to data sizes
-                model = MultipleMajorityVote(predictors, betas, a, weights=(0.5, 0.5), distr=distr, kl_factor=kl_factor)
+                model = MultipleMajorityVote(predictors, betas, a, n_classes, weights=(0.5, 0.5), distr=distr, kl_factor=kl_factor)
 
             else:
                 betas = torch.ones(M) * prior_coefficient # prior
 
-                model = MajorityVote(predictors, betas, a, distr=distr, kl_factor=kl_factor)
+                model = MajorityVote(predictors, betas, a, n_classes, distr=distr, kl_factor=kl_factor)
 
             monitor = MonitorMV(SAVE_DIR)
             optimizer = Adam(model.parameters(), lr=cfg.training.lr)
@@ -169,15 +170,14 @@ def main(cfg):
                 seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)
 
                 # Cropping the weight of base predictors that barely have an effect on the prediction
-                if seed_results["factor_no_finetune"] < 2:
+                if (cfg.training.distribution == "gaussian" and n_classes > 2) or seed_results["factor_no_finetune"] >= 2:
+                    ben_bound_with_finetune = 1
+                else:
                     model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
                     model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
                     # Second training phase
                     model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
-                if cfg.training.distribution == "gaussian" and n_classes > 2:
-                    ben_bound_with_finetune = 1
-                else:
                     ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
 
                 # Results are compiled in the 'seed_results' dictionary

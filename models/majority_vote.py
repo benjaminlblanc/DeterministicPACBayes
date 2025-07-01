@@ -5,7 +5,7 @@ from core.distributions import distr_dict
 
 class MajorityVote(torch.nn.Module):
 
-    def __init__(self, voters, prior, a, distr="dirichlet", kl_factor=1.):
+    def __init__(self, voters, prior, a, n_classes, distr="dirichlet", kl_factor=1.):
 
         super(MajorityVote, self).__init__()
         
@@ -25,8 +25,9 @@ class MajorityVote(torch.nn.Module):
         self.voters = voters
         self.mc_draws = 0
         self.a = a
+        self.n_classes = n_classes
         self.distr_type = distr
-        self.distribution = distr_dict[distr](self.post, self.a, 0)
+        self.distribution = distr_dict[distr](self.post, self.a, self.n_classes, 0)
         self.distribution_name = distr
         self.kl_factor = kl_factor
 
@@ -94,7 +95,7 @@ class MajorityVote(torch.nn.Module):
 
 class MultipleMajorityVote(torch.nn.Module):
 
-    def __init__(self, voter_sets, priors, a, weights, posteriors=None, distr="dirichlet",  kl_factor=1.):
+    def __init__(self, voter_sets, priors, a, n_classes, weights, posteriors=None, distr="dirichlet",  kl_factor=1.):
 
         super(MultipleMajorityVote, self).__init__()
 
@@ -104,10 +105,10 @@ class MultipleMajorityVote(torch.nn.Module):
         if posteriors is not None:
             assert len(priors) == len(posteriors), "must specify same number of priors and posteriors"
 
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
+            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, n_classes, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
 
         else:
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
+            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, n_classes, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
 
         self.weights = weights
         self.a = a

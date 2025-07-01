@@ -210,4 +210,4 @@ class MultinormalCDF(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad):
         purged_y_pred_minus_y_i, purged_mu, purged_Sigma = ctx.saved_tensors
-        return torch.tensor(0), -grad * torch.matmul(torch.inverse(purged_Sigma), torch.ones(len(purged_Sigma)) * 0.5), torch.tensor(0)
+        return torch.tensor(0), grad * torch.matmul(torch.inverse(purged_Sigma), torch.ones(len(purged_Sigma)) * 0.5), torch.tensor(0)
