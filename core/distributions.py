@@ -3,7 +3,7 @@ from torch.distributions.dirichlet import Dirichlet as Dir
 from torch.distributions.multivariate_normal import MultivariateNormal as Gaus
 import torch.nn.functional as F
 from torch import lgamma, digamma
-from core.utils import BetaInc, Phi
+from core.utils import BetaInc, Phi, multinomial_cdf_precomputations
 
 
 def log_Beta(vec):
@@ -52,7 +52,6 @@ class Dirichlet():
         wrong = torch.where(y_target != y_pred, exp_alpha, torch.zeros(1)).sum(1)
         
         s = [BetaInc.apply(c, w, torch.tensor(0.5 + self.a / 2), torch.tensor(1)) for c, w in zip(correct, wrong)]
-
         if mean:
             return sum(s) / len(y_target)
 
@@ -89,11 +88,12 @@ class Dirichlet():
 
 class Gaussian():
 
-    def __init__(self, w, a, mc_draws=10):
+    def __init__(self, w, a, n_classes, mc_draws=10):
 
         self.w = w
-        self.mc_draws = mc_draws
         self.a = a
+        self.n_classes = n_classes
+        self.mc_draws = mc_draws
 
     # Kullback-Leibler divergence between two Gaussian
     def KL(self, beta):
@@ -112,14 +112,17 @@ class Gaussian():
     def risk(self, batch, mean=True):
         # 01-loss applied to batch
         y_target, y_pred = batch
-        inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(self.w, (1, -1)) * y_pred, dim=1) - self.a) / torch.sum(y_pred ** 2, dim=1) ** 0.5
-
-        s = Phi(inner_Phi)
+        if self.n_classes == 2:
+            inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(self.w, (1, -1)) * y_pred, dim=1)) / torch.sum(y_pred ** 2, dim=1) ** 0.5
+            s = Phi(inner_Phi)
+        else:
+            s = multinomial_cdf_precomputations(y_pred, y_target, self.w, self.n_classes, torch.tensor(1))
 
         if mean:
             return sum(s) / len(y_target)
 
         return sum(s)
+
 
     def approximated_risk(self, batch, loss, mean=True):
 
@@ -130,9 +133,9 @@ class Gaussian():
         r = loss(y_target, y_pred, thetas)
 
         if mean:
-            return r.mean()
+            return sum(r) / len(r)
 
-        return r.sum()
+        return sum(r)
 
     def rsample(self):
 

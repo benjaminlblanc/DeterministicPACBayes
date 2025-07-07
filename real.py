@@ -15,7 +15,8 @@ from core.wandb_formatting import create_config_dico, create_run_name
 from core.bounds import BOUNDS
 from core.losses import moment_loss, bin_loss
 from core.monitors import MonitorMV
-from core.utils import deterministic, updating_first_seed_results, updating_last_seed_results, whether_to_run_run
+from core.utils import deterministic, updating_first_seed_results, updating_last_seed_results, whether_to_run_run, \
+    get_n_classes
 from data.datasets import Dataset, TorchDataset
 from models.majority_vote import MultipleMajorityVote, MajorityVote
 from models.random_forest import two_forests
@@ -44,11 +45,12 @@ def main(cfg):
     distribution_name = cfg.training.distribution
 
     # define params for each method
+    n_classes = get_n_classes(cfg.dataset)
     risks = { # type: (loss, bound_coeff, distribution_type, kl_factor, div)
-        "FO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
-        "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=2), 4., distribution_name, 2., 'KL'),
-        "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
-        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, distribution_name, order=1), 1., distribution_name, 1., 'Renyi'),
+        "FO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
+        "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=2), 4., distribution_name, 2., 'KL'),
+        "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n_classes, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
+        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'Renyi'),
     }
 
     train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
@@ -92,7 +94,7 @@ def main(cfg):
             else:
                 raise NotImplementedError("model.pred should be one the following: [stumps-uniform, rf]")
 
-            loss, coeff, distr, kl_factor, div = risks[cfg.training.risk]
+            loss, bound_coeff, distribution_type, kl_factor, div = risks[cfg.training.risk]
             a = cfg.model.a
             delta = cfg.bound.delta
             if cfg.training.risk in ['Dis_Renyi', 'Dis_KL']:
@@ -106,12 +108,12 @@ def main(cfg):
                 if cfg.bound.stochastic:
 
                     print("Evaluate bound regularizations over mini-batch")
-                    bound = lambda n, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, coeff, cfg.bound.order)
+                    bound = lambda n, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
                 else:
                     print("Evaluate bound regularizations over whole training set")
                     n = len(data.X_train)
-                    bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, coeff, cfg.bound.order)
+                    bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
             if cfg.model.pred == "rf": # a loader per posterior
 
@@ -136,12 +138,12 @@ def main(cfg):
                 betas = [torch.ones(M) * prior_coefficient for _ in predictors] # prior
 
                 # weights proportional to data sizes
-                model = MultipleMajorityVote(predictors, betas, a, weights=(0.5, 0.5), distr=distr, kl_factor=kl_factor)
+                model = MultipleMajorityVote(predictors, betas, a, n_classes, weights=(0.5, 0.5), distr=distribution_type, kl_factor=kl_factor)
 
             else:
                 betas = torch.ones(M) * prior_coefficient # prior
 
-                model = MajorityVote(predictors, betas, a, distr=distr, kl_factor=kl_factor)
+                model = MajorityVote(predictors, betas, a, n_classes, distr=distribution_type, kl_factor=kl_factor)
 
             monitor = MonitorMV(SAVE_DIR)
             optimizer = Adam(model.parameters(), lr=cfg.training.lr)
@@ -151,23 +153,25 @@ def main(cfg):
             # First training phase
             model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
             if cfg.training.risk == "FO":
-                ben_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
-                if cfg.training.distribution == 'categorical':
-                    deterministic_bound = final_bound['bound'] * 2
+                if cfg.training.distribution == "gaussian" and n_classes > 2:
+                    ben_bound_no_finetune = final_bound['bound'] * 2
                 else:
-                    deterministic_bound = 2
+                    ben_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
+                deterministic_bound = final_bound['bound'] * 2
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)
 
                 # Cropping the weight of base predictors that barely have an effect on the prediction
-                if seed_results["factor_no_finetune"] < 2:
+                if (cfg.training.distribution == "gaussian" and n_classes > 2) or seed_results["factor_no_finetune"] >= 2:
+                    ben_bound_with_finetune = ben_bound_no_finetune
+                else:
                     model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
                     model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
                     # Second training phase
                     model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
-                ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
+                    ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
