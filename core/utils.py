@@ -196,7 +196,7 @@ def multinomial_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
             Sigma = create_Sigma(one_hot_y_pred, i)
             purged_y_pred_minus_y_i, purged_mu, purged_Sigma = purge_redundant_variables(y_pred_minus_y_i, mu, Sigma)
             for j in range(len(mu)):
-                cdfs.append(MultinormalCDF.apply(purged_y_pred_minus_y_i[j], purged_mu[j], purged_Sigma[j]) ** order.item())
+                cdfs.append(1 - MultinormalCDF.apply(purged_y_pred_minus_y_i[j], purged_mu[j], purged_Sigma[j]) ** order.item())
     return cdfs
 
 class MultinormalCDF(torch.autograd.Function):
@@ -205,9 +205,9 @@ class MultinormalCDF(torch.autograd.Function):
     @staticmethod
     def forward(ctx, one_hot_y_pred, purged_mu, purged_Sigma):
         ctx.save_for_backward(one_hot_y_pred, purged_mu, purged_Sigma)
-        return torch.tensor(1 - multivariate_normal.cdf(torch.zeros(len(purged_mu)), purged_mu, purged_Sigma, abseps=1e-2, releps=1e-2), dtype=torch.float32)
+        return torch.tensor(multivariate_normal.cdf(torch.zeros(len(purged_mu)), purged_mu, purged_Sigma, abseps=1e-2, releps=1e-2), dtype=torch.float32)
 
     @staticmethod
     def backward(ctx, grad):
         purged_y_pred_minus_y_i, purged_mu, purged_Sigma = ctx.saved_tensors
-        return torch.tensor(0), grad * torch.matmul(torch.inverse(purged_Sigma), torch.ones(len(purged_Sigma)) * 0.5), torch.tensor(0)
+        return torch.tensor(0), -grad * torch.matmul(torch.inverse(purged_Sigma), torch.ones(len(purged_Sigma)) * 0.5), torch.tensor(0)
