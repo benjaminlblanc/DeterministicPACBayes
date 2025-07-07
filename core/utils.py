@@ -1,3 +1,4 @@
+import math
 import torch
 import numpy as np
 import random
@@ -20,11 +21,8 @@ def whether_to_run_run(cfg):
         assert cfg.model.prior == 0
         if cfg.training.risk == "Dis_Renyi":
             assert 1 < cfg.bound.order < 2
-
     if cfg.training.risk == "Bin":
         assert cfg.training.rand_n > 0
-
-
 
 def updating_first_seed_results(seed_results, time, model, train_err, test_err, deterministic_bound, final_bound, ben_bound_no_finetune):
     seed_results["train-error"] = train_err['error']
@@ -54,6 +52,29 @@ def updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_b
     else:
         seed_results["factor_with_finetune"] = 0
     return seed_results
+
+def log_stirling_approximation(n):
+    """
+    Stirling's approximation for the logarithm of the factorial
+    """
+    if n == 0:
+        return 0
+    return n * torch.log(n) - n + 0.5 * torch.log(2 * math.pi * n)
+
+
+def log_binomial_coefficient(n, k):
+    """
+    Logarithm of the binomial coefficient using Stirling's approximation
+    """
+    return (log_stirling_approximation(n) -
+            log_stirling_approximation(k) -
+            log_stirling_approximation(n - k))
+
+def log_prob_bin(k, n, r):
+    """
+    Logarithm of P(x = k), if X ~ Bin(n, r)
+    """
+    return log_binomial_coefficient(n, k) + k * torch.log(r + 1e-10) + (n - k) * torch.log(1 - r + 1e-10)
 
 def get_n_classes(dataset):
     if dataset in ["MUSH", "SVMGUIDE", "HABER", "TTT", "CODRNA", "ADULT", "PHIS"]:
