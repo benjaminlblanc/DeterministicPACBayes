@@ -11,16 +11,13 @@ from torch.special import erf
 def whether_to_run_run(cfg):
     if cfg.training.distribution in "dirichlet":
         assert cfg.model.prior in ["adjusted", 1]
-        assert cfg.model.stump_init == "ones"
         assert cfg.training.risk != "Dis_Renyi"
     elif cfg.training.distribution in "categorical":
         assert cfg.model.prior == "adjusted"
-        assert cfg.model.stump_init == "rand"
         if cfg.training.risk == "Dis_Renyi":
             assert 1 < cfg.bound.order
     elif cfg.training.distribution == "gaussian":
         assert cfg.model.prior == 0
-        assert cfg.model.stump_init == "rand"
         if cfg.training.risk == "Dis_Renyi":
             assert 1 < cfg.bound.order < 2
 
