@@ -94,7 +94,7 @@ def main(cfg):
             else:
                 raise NotImplementedError("model.pred should be one the following: [stumps-uniform, rf]")
 
-            loss, coeff, distr, kl_factor, div = risks[cfg.training.risk]
+            loss, bound_coeff, distribution_type, kl_factor, div = risks[cfg.training.risk]
             a = cfg.model.a
             delta = cfg.bound.delta
             if cfg.training.risk in ['Dis_Renyi', 'Dis_KL']:
@@ -108,12 +108,12 @@ def main(cfg):
                 if cfg.bound.stochastic:
 
                     print("Evaluate bound regularizations over mini-batch")
-                    bound = lambda n, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, coeff, cfg.bound.order)
+                    bound = lambda n, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
                 else:
                     print("Evaluate bound regularizations over whole training set")
                     n = len(data.X_train)
-                    bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, coeff, cfg.bound.order)
+                    bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
             if cfg.model.pred == "rf": # a loader per posterior
 
@@ -138,12 +138,12 @@ def main(cfg):
                 betas = [torch.ones(M) * prior_coefficient for _ in predictors] # prior
 
                 # weights proportional to data sizes
-                model = MultipleMajorityVote(predictors, betas, a, n_classes, weights=(0.5, 0.5), distr=distr, kl_factor=kl_factor)
+                model = MultipleMajorityVote(predictors, betas, a, n_classes, weights=(0.5, 0.5), distr=distribution_type, kl_factor=kl_factor)
 
             else:
                 betas = torch.ones(M) * prior_coefficient # prior
 
-                model = MajorityVote(predictors, betas, a, n_classes, distr=distr, kl_factor=kl_factor)
+                model = MajorityVote(predictors, betas, a, n_classes, distr=distribution_type, kl_factor=kl_factor)
 
             monitor = MonitorMV(SAVE_DIR)
             optimizer = Adam(model.parameters(), lr=cfg.training.lr)
