@@ -6,7 +6,6 @@ trials=5
 seed=541944
 
 for d in FASHION MNIST PENDIGITS PROTEIN SHUTTLE
-for d in ADULT CODRNA MUSH HABER PHIS SVMGUIDE TTT
 do
   for stump_init in ones rand
   do
