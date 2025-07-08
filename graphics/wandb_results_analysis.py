@@ -115,7 +115,7 @@ def generate_latex_table(final_results):
             Dis_Renyi_err_std = np.round(final_results["2"][i][7] * 100, 1)
     print(f"{last_dataset} & {FO} $\pm$ {FO_std} & {FO_err} $\pm$ {FO_err_std} & {SO} $\pm$ {SO_std} & {SO_err} $\pm$ {SO_err_std} & {Bin} $\pm$ {Bin_std} & {Bin_err} $\pm$ {Bin_err_std} & {Dis_Renyi} $\pm$ {Dis_Renyi_std} & {Dis_Renyi_err} $\pm$ {Dis_Renyi_err_std} & {Dis_KL} $\pm$ {Dis_KL_std} & {Dis_KL_err} $\pm$ {Dis_KL_err_std} & {Ben} $\pm$ {Ben_std} & {Ben_err} $\pm$ {Ben_err_std} \\\ ")
 
-file = 'wandb_export_2025-06-03T08_09_31.778-04_00.csv'
+file = 'wandb_export_2025-07-07T10_29_29.192-04_00.csv'
 hyperparams = ['M', 'batch_size', 'bootstrap', 'dataset', 'delta', 'distribution', 'is_using_wandb', 'lr',
                'num_epochs', 'num_trials', 'num_workers', 'opt_bound', 'order', 'pred', 'prior', 'project_name', 'rand_n',
                'risk', 'stochastic', 'stump_init', 'type', 'uniform']

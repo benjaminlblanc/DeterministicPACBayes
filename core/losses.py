@@ -3,6 +3,12 @@ import torch
 from core.utils import BetaInc, Phi, multinomial_cdf_precomputations, log_prob_bin
 
 
+def triple_loss(y_target, y_pred, theta, distribution, n_classes):
+    first_loss = moment_loss(y_target, y_pred, theta, distribution, n_classes, order=1)
+    second_loss = torch.where(first_loss >= 0.5, first_loss, torch.zeros(1))
+    third_loss = torch.where(first_loss < 0.5, first_loss, torch.zeros(1))
+    return first_loss, second_loss[second_loss.nonzero()], third_loss[third_loss.nonzero()]
+
 def bin_loss(y_target, y_pred, theta, distribution, n_classes, n=100):
     first_order_loss = moment_loss(y_target, y_pred, theta, distribution, n_classes, order=1)
     bin_loss = torch.zeros(len(first_order_loss))

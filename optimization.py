@@ -4,6 +4,7 @@ from tqdm import tqdm
 import torch
 
 from core.deterministic_bounding import compute_det_bound, compute_bound
+from core.losses import triple_loss
 from models.majority_vote import MultipleMajorityVote
 
 
@@ -161,7 +162,7 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
 
 def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, risk_type, n, loss=None, monitor=None,
-                       num_epochs=100, lr_scheduler=None, true_risk_bounding=False):
+                       num_epochs=100, lr_scheduler=None, true_risk_bounding=False, test_bound=None, distribution_name='', n_classes=0):
 
     best_bound = float("inf")
     best_model = deepcopy(model)
@@ -204,6 +205,8 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     train_error = val_routine(trainloader, best_model)
     test_error = test_routine(testloader, best_model)
     final_bound = {'bound': best_bound}
+
+    triple_bnd = compute_bound(model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, distribution_name, n_classes), False)
 
     if risk_type in ['FO', 'Dis_Renyi']:
         test_errors = []

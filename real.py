@@ -109,11 +109,13 @@ def main(cfg):
 
                     print("Evaluate bound regularizations over mini-batch")
                     bound = lambda n, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
+                    test_bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
                 else:
                     print("Evaluate bound regularizations over whole training set")
                     n = len(data.X_train)
                     bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
+                    test_bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
             if cfg.model.pred == "rf": # a loader per posterior
 
@@ -151,7 +153,7 @@ def main(cfg):
             lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
 
             # First training phase
-            model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False)
+            model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
             if cfg.training.risk == "FO":
                 if cfg.training.distribution == "gaussian" and n_classes > 2:
                     ben_bound_no_finetune = final_bound['bound'] * 2
@@ -170,7 +172,7 @@ def main(cfg):
                     model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
                     # Second training phase
-                    model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True)
+                    model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                     ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
 
                 # Results are compiled in the 'seed_results' dictionary

@@ -76,6 +76,10 @@ def log_prob_bin(k, n, r):
     """
     return log_binomial_coefficient(n, k) + k * torch.log(r + 1e-10) + (n - k) * torch.log(1 - r + 1e-10)
 
+def find_ns(risks, n):
+    p = (risks[0] - risks[2]) / (risks[1] - risks[2])
+    return n, int(p * n), int((1-p) * n)
+
 def get_n_classes(dataset):
     if dataset in ["MUSH", "SVMGUIDE", "HABER", "TTT", "CODRNA", "ADULT", "PHIS"]:
         return 2

@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from core.kl_inv import klInvFunction
+from core.utils import find_ns
 from models.majority_vote import MultipleMajorityVote
 
 
@@ -27,6 +28,7 @@ def mcallester_bound(n, model, risk, delta, coeff=1, verbose=False, monitor=None
         monitor.write(train={"KL": kl.item(), "risk": risk.item()})
 
     return bound 
+
 
 def seeger_bound(n, model, risk, delta, div, sample=False, coeff=1, order=None, verbose=False, monitor=None):
 
@@ -60,10 +62,52 @@ def seeger_bound(n, model, risk, delta, div, sample=False, coeff=1, order=None, 
     if monitor:
         monitor.write(train={"KL": kl.item(), "risk": risk.item()})
 
-    return bound 
+    return bound
+
+
+def triple_bound(n, model, risks, delta, div, sample=False, coeff=1, order=None, verbose=False, monitor=None):
+    delta /= 3
+    ns = torch.tensor(find_ns(risks, n))
+
+    if sample:
+        kl = model.KL_dis()
+    elif div == 'KL':
+        kl = model.KL()
+    elif div == 'Renyi':
+        kl = model.Renyi(order)
+
+    if isinstance(model, MultipleMajorityVote):  # informed priors
+
+        consts = np.log(4 * (ns ** 2 / 4) ** 0.5 / delta)
+        kl *= 2
+
+    else:
+        if div == 'Renyi':
+            consts = (2 * order - 1) / (order - 1) * np.log(2 / delta) + np.log(2 * ns ** 0.5)
+        else:
+            consts = np.log(2 * (ns ** 0.5) / delta)
+
+    if sample:
+        bound_1 = coeff * klInvFunction.apply(risks[0], torch.max(kl + consts[0], torch.tensor(0)) / ns[0], "MAX")
+        bound_2 = coeff * klInvFunction.apply(risks[1], torch.max(kl + consts[1], torch.tensor(0)) / ns[1], "MIN")
+        bound_3 = coeff * klInvFunction.apply(risks[2], torch.max(kl + consts[2], torch.tensor(0)) / ns[2], "MIN")
+    else:
+        bound_1 = coeff * klInvFunction.apply(risks[0], (kl + consts[0]) / ns[0], "MAX")
+        bound_2 = coeff * klInvFunction.apply(risks[1], (kl + consts[1]) / ns[1], "MIN")
+        bound_3 = coeff * klInvFunction.apply(risks[2], (kl + consts[2]) / ns[2], "MIN")
+    bound = (bound_1 - bound_3) / (bound_2 - bound_3)
+
+    if verbose:
+        print(f"Bound={bound.item()}\n")
+
+    if monitor:
+        monitor.write(train={"KL": kl.item(), "risk": (risks[0].item(), risks[1].item(), risks[2].item())})
+
+    return bound
 
 
 BOUNDS = {
     "mcallester": mcallester_bound,
     "seeger": seeger_bound,
+    "triple": triple_bound,
 }

@@ -65,6 +65,11 @@ class Dirichlet():
 
         r = loss(y_target, y_pred, thetas)
 
+        if type(r) == tuple:
+            if mean:
+                    return r[0].mean(), r[1].mean(), r[2].mean()
+            return (r[0].sum(), r[1].sum(), r[2].sum()), (len(r[0]), len(r[1]), len(r[2]))
+
         if mean:
             return sum(r) / len(y_target)
 
@@ -132,6 +137,11 @@ class Gaussian():
 
         r = loss(y_target, y_pred, thetas)
 
+        if type(r) == tuple:
+            if mean:
+                    return r[0].mean(), r[1].mean(), r[2].mean()
+            return (r[0].sum(), r[1].sum(), r[2].sum()), (len(r[0]), len(r[1]), len(r[2]))
+
         if mean:
             return sum(r) / len(r)
 
@@ -185,10 +195,14 @@ class Categorical():
         y_target, y_pred = batch
 
         r = loss(y_target, y_pred, t)
-        
+
+        if type(r) == tuple:
+            if mean:
+                    return r[0].mean(), r[1].mean(), r[2].mean()
+            return (r[0].sum(), r[1].sum(), r[2].sum()), (len(r[0]), len(r[1]), len(r[2]))
+
         if mean:
             return r.mean()
-
         return r.sum()
 
     def risk(self, batch, mean=True):
