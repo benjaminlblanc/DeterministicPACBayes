@@ -8,6 +8,8 @@ from betaincder import betainc, betaincderp, betaincderq
 from torch import lgamma, log1p, exp, log
 from torch.special import erf
 
+epsilon = torch.tensor(1e-10)
+
 
 def whether_to_run_run(cfg):
     if cfg.training.distribution in "dirichlet":
@@ -74,11 +76,11 @@ def log_prob_bin(k, n, r):
     """
     Logarithm of P(x = k), if X ~ Bin(n, r)
     """
-    return log_binomial_coefficient(n, k) + k * torch.log(r + 1e-10) + (n - k) * torch.log(1 - r + 1e-10)
+    return log_binomial_coefficient(n, k) + k * torch.log(torch.max(r, epsilon)) + (n - k) * torch.log(torch.max(1 - r, epsilon))
 
 def find_ns(risks, n):
     p = (risks[0] - risks[2]) / (risks[1] - risks[2])
-    return n, int(p * n), int((1-p) * n)
+    return n, max(int(p * n), 1), max(int((1-p) * n), 1)
 
 def get_n_classes(dataset):
     if dataset in ["MUSH", "SVMGUIDE", "HABER", "TTT", "CODRNA", "ADULT", "PHIS"]:
@@ -219,7 +221,7 @@ def multinomial_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
             purged_y_pred_minus_y_i, purged_mu, purged_Sigma = purge_redundant_variables(y_pred_minus_y_i, mu, Sigma)
             for j in range(len(mu)):
                 cdfs.append(1 - MultinormalCDF.apply(purged_y_pred_minus_y_i[j], purged_mu[j], purged_Sigma[j]) ** order.item())
-    return cdfs
+    return torch.tensor(cdfs)
 
 class MultinormalCDF(torch.autograd.Function):
     """Cumulative distribution function of the multivariate normal distribution; its forward and backward passes"""

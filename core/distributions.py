@@ -67,7 +67,7 @@ class Dirichlet():
 
         if type(r) == tuple:
             if mean:
-                    return r[0].mean(), r[1].mean(), r[2].mean()
+                    return torch.tensor([r[0].mean(), r[1].mean(), r[2].mean()])
             return (r[0].sum(), r[1].sum(), r[2].sum()), (len(r[0]), len(r[1]), len(r[2]))
 
         if mean:
@@ -139,7 +139,7 @@ class Gaussian():
 
         if type(r) == tuple:
             if mean:
-                    return r[0].mean(), r[1].mean(), r[2].mean()
+                    return torch.tensor([r[0].mean(), r[1].mean(), r[2].mean()])
             return (r[0].sum(), r[1].sum(), r[2].sum()), (len(r[0]), len(r[1]), len(r[2]))
 
         if mean:
@@ -198,7 +198,7 @@ class Categorical():
 
         if type(r) == tuple:
             if mean:
-                    return r[0].mean(), r[1].mean(), r[2].mean()
+                    return torch.tensor([r[0].mean(), r[1].mean(), r[2].mean()])
             return (r[0].sum(), r[1].sum(), r[2].sum()), (len(r[0]), len(r[1]), len(r[2]))
 
         if mean:

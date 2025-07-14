@@ -29,7 +29,7 @@ from optimization import stochastic_routine
 def main(cfg):
     whether_to_run_run(cfg)
 
-    ROOT_DIR = f"{hydra.utils.get_original_cwd()}/results/{cfg.dataset}/{cfg.training.risk}/{cfg.bound.type}/{cfg.training.distribution}/optimize-bound={cfg.training.opt_bound}/{cfg.model.pred}/M={cfg.model.M}/max-depth={cfg.model.tree_depth}/prior={cfg.model.prior}/"
+    ROOT_DIR = f"{hydra.utils.get_original_cwd()}/results/{cfg.dataset}/{cfg.training.risk}/{cfg.training.distribution}/stmp-nt={cfg.model.stump_init}/r-n={cfg.training.rand_n}/order={cfg.bound.order}/prior={cfg.model.prior}/"
 
     ROOT_DIR = Path(ROOT_DIR)
 
@@ -158,24 +158,27 @@ def main(cfg):
             lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
 
             # First training phase
-            model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+            model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
             if cfg.training.risk == "FO":
-                ben_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate, n_classes > 2).item()
+                if cfg.training.distribution == "gaussian" and n_classes > 2:
+                    ben_bound_no_finetune = final_bound['bound'] * 2
+                else:
+                    ben_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
                 deterministic_bound = final_bound['bound'] * 2
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)
 
                 # Cropping the weight of base predictors that barely have an effect on the prediction
-                if seed_results["factor_no_finetune"] >= 2:
+                if (cfg.training.distribution == "gaussian" and n_classes > 2) or seed_results["factor_no_finetune"] >= 2:
                     ben_bound_with_finetune = ben_bound_no_finetune
                 else:
-                    model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
-                    model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
+                    #model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
+                    #model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
                     # Second training phase
-                    model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
-                    ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate, n_classes > 2).item()
+                    #model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                    ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
 
                 # Results are compiled in the 'seed_results' dictionary
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
