@@ -29,7 +29,7 @@ from optimization import stochastic_routine
 def main(cfg):
     whether_to_run_run(cfg)
 
-    ROOT_DIR = f"{hydra.utils.get_original_cwd()}/results/{cfg.dataset}/{cfg.training.risk}/{cfg.bound.type}/{cfg.training.distribution}/optimize-bound={cfg.training.opt_bound}/{cfg.model.pred}/M={cfg.model.M}/max-depth={cfg.model.tree_depth}/prior={cfg.model.prior}/"
+    ROOT_DIR = f"{hydra.utils.get_original_cwd()}/results/{cfg.dataset}/{cfg.training.risk}/{cfg.training.distribution}/stmp-nt={cfg.model.stump_init}/r-n={cfg.training.rand_n}/order={cfg.bound.order}/prior={cfg.model.prior}/"
 
     ROOT_DIR = Path(ROOT_DIR)
 
@@ -80,6 +80,11 @@ def main(cfg):
                 data = Dataset(cfg.dataset.distr, n_train=cfg.dataset.N_train, n_test=cfg.dataset.N_test, noise=cfg.dataset.noise)
             except:
                 data = Dataset(cfg.dataset, normalize=True, data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
+
+            data.X_train = data.X_train[:2000]
+            data.y_train = data.y_train[:2000]
+            data.X_test = data.X_test[:2000]
+            data.y_test = data.y_test[:2000]
 
             if cfg.model.pred == "stumps-uniform":
                 predictors, M = uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0), cfg.model.stump_init)
@@ -168,11 +173,11 @@ def main(cfg):
                 if (cfg.training.distribution == "gaussian" and n_classes > 2) or seed_results["factor_no_finetune"] >= 2:
                     ben_bound_with_finetune = ben_bound_no_finetune
                 else:
-                    model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
-                    model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
+                    #model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
+                    #model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
 
                     # Second training phase
-                    model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                    #model, final_bound, _, train_error, test_error, time = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=True, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                     ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, cur_PB_bound=final_bound['bound']).item()
 
                 # Results are compiled in the 'seed_results' dictionary

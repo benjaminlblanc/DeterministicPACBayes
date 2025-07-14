@@ -7,6 +7,8 @@ def triple_loss(y_target, y_pred, theta, distribution, n_classes):
     first_loss = moment_loss(y_target, y_pred, theta, distribution, n_classes, order=1)
     second_loss = torch.where(first_loss >= 0.5, first_loss, torch.zeros(1))
     third_loss = torch.where(first_loss < 0.5, first_loss, torch.zeros(1))
+    if torch.sum(third_loss) == 0:
+        return first_loss, second_loss[second_loss.nonzero()], torch.tensor(0.5)
     return first_loss, second_loss[second_loss.nonzero()], third_loss[third_loss.nonzero()]
 
 def bin_loss(y_target, y_pred, theta, distribution, n_classes, n=100):
@@ -20,7 +22,7 @@ def moment_loss(y_target, y_pred, theta, distribution, n_classes, order=1):
     if distribution == 'dirichlet':
         correct = torch.where(y_target == y_pred, theta, torch.zeros(1)).sum(1)
         wrong = torch.where(y_target != y_pred, theta, torch.zeros(1)).sum(1)
-        return [BetaInc.apply(c, w, torch.tensor(0.5), torch.tensor(order)) for c, w in zip(correct, wrong)]
+        return torch.tensor([BetaInc.apply(c, w, torch.tensor(0.5), torch.tensor(order)) for c, w in zip(correct, wrong)])
 
     elif distribution == 'gaussian':
         if n_classes == 2:
