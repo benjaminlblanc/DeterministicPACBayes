@@ -8,6 +8,8 @@ from betaincder import betainc, betaincderp, betaincderq
 from torch import lgamma, log1p, exp, log
 from torch.special import erf
 
+epsilon = torch.tensor(1e-10)
+
 
 def whether_to_run_run(cfg):
     if cfg.training.distribution in "dirichlet":
@@ -74,7 +76,7 @@ def log_prob_bin(k, n, r):
     """
     Logarithm of P(x = k), if X ~ Bin(n, r)
     """
-    return log_binomial_coefficient(n, k) + k * torch.log(r + 1e-10) + (n - k) * torch.log(1 - r + 1e-10)
+    return log_binomial_coefficient(n, k) + k * torch.log(torch.max(r, epsilon)) + (n - k) * torch.log(torch.max(1 - r, epsilon))
 
 def find_ns(risks, n):
     p = (risks[0] - risks[2]) / (risks[1] - risks[2])
