@@ -103,7 +103,7 @@ def triple_bound(n, model, risks, delta, div, sample=False, coeff=1, order=None,
     if monitor:
         monitor.write(train={"KL": kl.item(), "risk": (risks[0].item(), risks[1].item(), risks[2].item())})
 
-    return bound
+    return torch.tensor([bound_3, bound_2])
 
 
 BOUNDS = {

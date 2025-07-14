@@ -13,7 +13,7 @@ def I(l, u, a):
     c = torch.tensor((1 + a) / 2)
     return BetaInc.apply(l, u, c, torch.tensor(1))
 
-def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a):
+def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a, b_surrogate, c_surrogate):
     """
     Computes Ben's bound, given Gibbs risk, u and l.
     """
@@ -21,12 +21,14 @@ def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a
         biggest_norm = get_bound_on_pred_norm(leaf_values, max)
         smallest_norm = get_bound_on_pred_norm(leaf_values, min)
         phi_l, phi_u = Phi((l + a) / biggest_norm), Phi((u - a) / smallest_norm)
-        return (Gibbs_risk - phi_u) / (1 - phi_l - phi_u)
+        b, c = phi_u, 1 - phi_l
     elif distribution == "dirichlet":
-        I_l, I_u = I(l_1_norm - l, l, a), I(u, l_1_norm - u, a)
-        return (Gibbs_risk - I_u) / (I_l - I_u)
+        I_l, I_u = I(u, l_1_norm - u, a), I(l_1_norm - l, l, a)
+        b, c = I_l, I_u
     elif distribution == "categorical":
-        return (Gibbs_risk - (1 - u)) / (l - (1 - u))
+        b, c = 1 - u, l
+    best_b, best_c = max(b, b_surrogate), max(c, c_surrogate)
+    return (Gibbs_risk - best_b) / (best_c - best_b)
 
 def get_indices(possible_values, sums):
     """
@@ -46,7 +48,7 @@ def get_indices(possible_values, sums):
     tot.append(tot_2)
     return tot
 
-def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribution):
+def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribution, multiclass=False):
     """
     Returns the l and u values from the true-risk bound (see --).
     """
@@ -80,6 +82,8 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
             possible_values = np.array([1, 1])
     indices = get_indices(possible_values.copy(), sums)
     if distribution == "gaussian":
+        if multiclass:
+            return 0, 10, None
         sum_1 = torch.sum(normalized_tree_weights[indices[0]])
         sum_2 = torch.sum(normalized_tree_weights[indices[1]])
         return torch.abs(sum_1 - sum_2), torch.sum(torch.abs(normalized_tree_weights)), None
@@ -135,16 +139,16 @@ def compute_bound(model, bound, n, trainloader, loss, sample):
         cur_PB_bound /= count
     return cur_PB_bound
 
-def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name, cur_PB_bound=None):
+def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name, cur_PB_bound=None, b_surrogate=0, c_surrogate=0.5, multiclass=False):
     """
     Pipeline for computing the deterministic bound.
     """
     leaves = np.ones((n_alphas, 2))
     leaves[:, 0] = -1
-    l, u, l_1_norm = get_normalized_l_u(leaves, model.get_post(), 'sign', distribution_name)
+    l, u, l_1_norm = get_normalized_l_u(leaves, model.get_post(), 'sign', distribution_name, multiclass)
     if cur_PB_bound is None:
         cur_PB_bound = compute_bound(model, bound, n, trainloader, loss, False)
-    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, leaves, distribution_name, model.a)
+    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, leaves, distribution_name, model.a, b_surrogate, c_surrogate)
 
 def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name):
     """
