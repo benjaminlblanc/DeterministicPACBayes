@@ -39,7 +39,6 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
     model.train()
 
     last_iter = epoch * len(dataloader)
-    train_obj = 0.
 
     for i, batch in enumerate(dataloader):
 
@@ -59,8 +58,6 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
 
         else:
             cost = model.risk(data, loss)
-
-        train_obj += cost.item()
 
         cost.backward()
         optimizer.step()
@@ -106,18 +103,36 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
     model.eval()
 
     risk = 0.
+    risk_multi = torch.tensor([0., 0., 0.])
     strength = 0.
-    n = 0
+    n, n_1, n_2, n_3 = 0, 0, 0, 0
 
     for batch in dataloader:
         data = batch[1], model(batch[0])
-        risk += model.risk(data, loss=loss, mean=False)
+        model_risk = model.risk(data, loss=loss, mean=False)
         strength += sum(model.voter_strength(data))
-        n += len(data[0])
+        if type(model_risk) != tuple:
+            risk += model_risk
+            n += len(data[0])
+        else:
+            risk_multi[0] += model_risk[0][0]
+            risk_multi[1] += model_risk[0][1]
+            risk_multi[2] += model_risk[0][2]
+            n_1 += model_risk[1][0]
+            n_2 += model_risk[1][1]
+            n_3 += model_risk[1][2]
 
-    risk /= n
-    strength /= n
-    total_metrics = {"error": risk.item(), "strength": strength.item()}
+    if type(model_risk) != tuple:
+        risk /= n
+        strength /= n
+        total_metrics = {"error": risk.item(), "strength": strength.item()}
+    else:
+        risk_multi[0] /= n_1
+        risk_multi[1] /= n_2
+        risk_multi[2] /= n_3
+        strength /= n_1
+        risk = risk_multi
+        total_metrics = {"error": risk[0].item(), "strength": strength.item()}
 
     if bounds is not None:
         for k in bounds.keys():

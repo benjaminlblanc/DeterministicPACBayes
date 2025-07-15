@@ -65,7 +65,7 @@ def seeger_bound(n, model, risk, delta, div, sample=False, coeff=1, order=None, 
     return bound
 
 
-def triple_bound(n, model, risks, delta, div, sample=False, coeff=1, order=None, verbose=False, monitor=None):
+def triple_bound(n, model, risks, delta, div, sample=False, coeff=1, order=None, return_single=False, verbose=False, monitor=None):
     delta /= 3
     ns = torch.tensor(find_ns(risks, n))
 
@@ -103,6 +103,8 @@ def triple_bound(n, model, risks, delta, div, sample=False, coeff=1, order=None,
     if monitor:
         monitor.write(train={"KL": kl.item(), "risk": (risks[0].item(), risks[1].item(), risks[2].item())})
 
+    if return_single:
+        return bound
     return torch.tensor([bound_3, bound_2])
 
 

@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from core.deterministic_bounding import crop_weak_learners, compute_det_bound, manual_model_finetune
 from core.wandb_formatting import create_config_dico, create_run_name
 from core.bounds import BOUNDS
-from core.losses import moment_loss, bin_loss
+from core.losses import moment_loss, bin_loss, triple_loss
 from core.monitors import MonitorMV
 from core.utils import deterministic, updating_first_seed_results, updating_last_seed_results, whether_to_run_run, \
     get_n_classes
@@ -47,6 +47,7 @@ def main(cfg):
     # define params for each method
     n_classes = get_n_classes(cfg.dataset)
     risks = { # type: (loss, bound_coeff, distribution_type, kl_factor, div)
+        "Triple": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),
         "FO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
         "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=2), 4., distribution_name, 2., 'KL'),
         "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n_classes, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
@@ -176,6 +177,19 @@ def main(cfg):
                     ben_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate).item()
 
                 # Results are compiled in the 'seed_results' dictionary
+                seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
+            elif cfg.training.risk == "Triple":
+                optimizer = Adam(model.parameters(), lr=cfg.training.lr / 10)
+                # init learning rate scheduler
+                lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
+                loss, bound_coeff, distribution_type, kl_factor, div = (lambda x, y, z: triple_loss(x, y, z, distribution_name, n_classes), 1., distribution_name, 1., 'KL')
+                if cfg.bound.stochastic:
+                    bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
+                else:
+                    bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
+                model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                deterministic_bound, ben_bound_no_finetune, ben_bound_with_finetune = final_bound['bound'], 2, 2
+                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune)
                 seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i)
             else:
                 deterministic_bound, ben_bound_no_finetune, ben_bound_with_finetune = final_bound['bound'], 2, 2
