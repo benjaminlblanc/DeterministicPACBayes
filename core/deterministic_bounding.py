@@ -27,7 +27,11 @@ def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a
         b, c = I_l, I_u
     elif distribution == "categorical":
         b, c = 1 - u, l
-    best_b, best_c = max(b, b_surrogate), max(c, c_surrogate)
+    best_c = max(c, c_surrogate)
+    if best_c > Gibbs_risk:
+        best_b = max(b, b_surrogate)
+    else:
+        best_b = min(b, b_surrogate)
     return (Gibbs_risk - best_b) / (best_c - best_b)
 
 def get_indices(possible_values, sums):

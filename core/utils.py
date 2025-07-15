@@ -79,6 +79,8 @@ def log_prob_bin(k, n, r):
     return log_binomial_coefficient(n, k) + k * torch.log(torch.max(r, epsilon)) + (n - k) * torch.log(torch.max(1 - r, epsilon))
 
 def find_ns(risks, n):
+    if risks[1] == risks[2]:
+        return n, n // 2, n // 2
     p = (risks[0] - risks[2]) / (risks[1] - risks[2])
     return n, max(int(p * n), 1), max(int((1-p) * n), 1)
 

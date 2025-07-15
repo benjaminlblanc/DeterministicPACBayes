@@ -1,10 +1,11 @@
 import torch
-
 from core.utils import BetaInc, Phi, multinomial_cdf_precomputations, log_prob_bin
 
 
 def triple_loss(y_target, y_pred, theta, distribution, n_classes):
     first_loss = moment_loss(y_target, y_pred, theta, distribution, n_classes, order=1)
+    if not torch.is_tensor(first_loss):
+        first_loss = torch.tensor(first_loss)
     second_loss = torch.where(first_loss >= 0.5, first_loss, torch.zeros(1))
     third_loss = torch.where(first_loss < 0.5, first_loss, torch.zeros(1))
     if torch.sum(third_loss) == 0:
@@ -22,7 +23,7 @@ def moment_loss(y_target, y_pred, theta, distribution, n_classes, order=1):
     if distribution == 'dirichlet':
         correct = torch.where(y_target == y_pred, theta, torch.zeros(1)).sum(1)
         wrong = torch.where(y_target != y_pred, theta, torch.zeros(1)).sum(1)
-        return torch.tensor([BetaInc.apply(c, w, torch.tensor(0.5), torch.tensor(order)) for c, w in zip(correct, wrong)])
+        return [BetaInc.apply(c, w, torch.tensor(0.5), torch.tensor(order)) for c, w in zip(correct, wrong)]
 
     elif distribution == 'gaussian':
         if n_classes == 2:
