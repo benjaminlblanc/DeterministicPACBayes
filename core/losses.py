@@ -2,6 +2,14 @@ import torch
 from core.utils import BetaInc, Phi, multinomial_cdf_precomputations, log_prob_bin
 
 
+def true_loss(y_target, y_pred, theta, distribution):
+    input = torch.where(y_target != y_pred, theta, -theta).sum(1)
+    heaviside = torch.heaviside(input, torch.tensor(0.))
+    if distribution == 'categorical':
+        return heaviside.detach() + input - input.detach()
+    elif distribution in ['dirichlet', 'gaussian']:
+        return [torch.sigmoid(inp) for inp in input]
+
 def triple_loss(y_target, y_pred, theta, distribution, n_classes):
     first_loss = moment_loss(y_target, y_pred, theta, distribution, n_classes, order=1)
     if not torch.is_tensor(first_loss):

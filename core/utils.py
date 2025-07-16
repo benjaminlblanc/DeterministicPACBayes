@@ -223,7 +223,7 @@ def multinomial_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
             purged_y_pred_minus_y_i, purged_mu, purged_Sigma = purge_redundant_variables(y_pred_minus_y_i, mu, Sigma)
             for j in range(len(mu)):
                 cdfs.append(1 - MultinormalCDF.apply(purged_y_pred_minus_y_i[j], purged_mu[j], purged_Sigma[j]) ** order.item())
-    return torch.tensor(cdfs)
+    return cdfs
 
 class MultinormalCDF(torch.autograd.Function):
     """Cumulative distribution function of the multivariate normal distribution; its forward and backward passes"""
