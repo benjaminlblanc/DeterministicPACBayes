@@ -17,13 +17,11 @@ do
 
     r=SO
     python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.1 training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=$stump_init training.seed=$seed
-    python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.01 training.distribution=gaussian model.prior=0 training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=$stump_init training.seed=$seed
 
     r=Bin
     for r_n in 10 100
     do
       python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.1 training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=$stump_init training.rand_n=$r_n training.seed=$seed
-      python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.01 training.distribution=gaussian model.prior=0 training.risk=$r model.pred=$prd is_using_wandb=$wandb model.stump_init=$stump_init training.rand_n=$r_n training.seed=$seed
     done
 
     r=Dis_Renyi
