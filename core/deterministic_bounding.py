@@ -32,7 +32,10 @@ def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a
         best_b = max(b, b_surrogate)
     else:
         best_b = min(b, b_surrogate)
-    return (Gibbs_risk - best_b) / (best_c - best_b)
+    ben = (Gibbs_risk - b) / (c - b)
+    triple = (Gibbs_risk - b_surrogate) / (c_surrogate - b_surrogate)
+    ben_triple = (Gibbs_risk - best_b) / (best_c - best_b)
+    return ben, triple, ben_triple
 
 def get_indices(possible_values, sums):
     """
@@ -162,7 +165,7 @@ def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, di
     best_alphas = model.get_post()
     sorted_alphas = torch.sort(torch.abs(best_alphas.clone()))[0]
     n_alphas = len(best_alphas)
-    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
+    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)[2]
     pbar = tqdm(range(12))
     low, up, strikes = 0, (n_alphas-1) * 1.5, 0
     print(f"Current true-risk bound: {best_bound}.")
@@ -173,12 +176,12 @@ def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, di
         post = model.get_post().clone()
         post[torch.abs(best_alphas) <= sorted_alphas[mean]] = prior_coefficient
         model.set_post(post)
-        cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
+        cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)[2]
         if cur_bound < best_bound:
             best_bound = cur_bound
             best_alphas = model.get_post()
             low = mean
-            print(f"Current true-risk bound: {best_bound}.")
+            print(f"Current ben bound: {best_bound}.")
         else:
             post = best_alphas
             model.set_post(post)
@@ -195,7 +198,7 @@ def manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
     """
     best_alphas = model.get_post()
     n_alphas = len(best_alphas)
-    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
+    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)[2]
     changed = True
     while changed:
         changed = False
@@ -205,7 +208,7 @@ def manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
                 rang.append(i)
         np.random.shuffle(rang)
         pbar = tqdm(rang[:min(100, len(rang))])
-        print(f"Current true-risk bound: {best_bound}.")
+        print(f"Current ben bound: {best_bound}.")
         for i in pbar:
             for change in ['min', 'max']:
                 # We slightly modify the current weighting
@@ -213,7 +216,7 @@ def manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
                 post[i] = post[i] + (change == 'max') * factor - (change == 'min') * factor + 0.01 + torch.rand(1) * 0.001
                 model.set_post(post)
                 # And compute the resulting bound.
-                cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)
+                cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)[2]
                 if cur_bound < best_bound - 1e-4:
                     best_bound = cur_bound
                     best_alphas = model.get_post()

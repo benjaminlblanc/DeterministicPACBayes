@@ -26,7 +26,7 @@ def whether_to_run_run(cfg):
     if cfg.training.risk == "Bin":
         assert cfg.training.rand_n > 0
 
-def updating_first_seed_results(seed_results, time, model, train_err, test_err, deterministic_bound, final_bound, ben_bound_no_finetune):
+def updating_first_seed_results(seed_results, time, model, train_err, test_err, deterministic_bound, final_bound, ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune):
     seed_results["train-error"] = train_err['error']
     seed_results["test-error"] = test_err['error']
     seed_results["test-error_sampled"] = test_err['error_sampled']
@@ -35,24 +35,20 @@ def updating_first_seed_results(seed_results, time, model, train_err, test_err, 
     seed_results["deterministic_bound_sampled"] = final_bound["bound_sampled"]
     seed_results["deterministic_bound_sampled_std"] = final_bound["bound_sampled_std"]
     seed_results["ben_bound_no_finetune"] = ben_bound_no_finetune
+    seed_results["triple_bound_no_finetune"] = triple_bound_no_finetune
+    seed_results["ben_triple_bound_no_finetune"] = ben_triple_bound_no_finetune
     seed_results["time"] = time
     seed_results["posterior"] = model.get_post().detach().numpy()
     seed_results["KL"] = model.KL().item()
-    if ben_bound_no_finetune != 2:
-        seed_results["factor_no_finetune"] = ben_bound_no_finetune / final_bound['bound']
-    else:
-        seed_results["factor_no_finetune"] = 0
     return seed_results
 
-def updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, i):
+def updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, triple_bound_with_finetune, ben_triple_bound_with_finetune, i):
     seed_results["seed"] = cfg.training.seed+i
     seed_results["train-error_finetune"] = train_error['error']
     seed_results["test-error_finetune"] = test_error['error']
     seed_results["ben_bound_with_finetune"] = ben_bound_with_finetune
-    if ben_bound_with_finetune != 2:
-        seed_results["factor_with_finetune"] = ben_bound_with_finetune / (seed_results["ben_bound_no_finetune"] / seed_results["factor_no_finetune"])
-    else:
-        seed_results["factor_with_finetune"] = 0
+    seed_results["triple_bound_with_finetune"] = triple_bound_with_finetune
+    seed_results["ben_triple_bound_with_finetune"] = ben_triple_bound_with_finetune
     return seed_results
 
 def log_stirling_approximation(n):

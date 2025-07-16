@@ -66,7 +66,6 @@ def seeger_bound(n, model, risk, delta, div, sample=False, coeff=1, order=None, 
 
 
 def triple_bound(n, model, risks, delta, div, sample=False, coeff=1, order=None, return_single=False, verbose=False, monitor=None):
-    delta /= 3
     ns = torch.tensor(find_ns(risks, n))
 
     if sample:
