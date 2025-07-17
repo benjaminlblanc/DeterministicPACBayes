@@ -8,6 +8,8 @@ def kl_inv(q, epsilon, mode, nb_iter_max=1000):
     
     assert mode in ["MIN", "MAX"]
     assert epsilon >= 0, epsilon
+    if 1 < q <= 1.01:
+        q = q / q
     assert 0. <= q <= 1., q
 
     if(mode == "MAX"):
