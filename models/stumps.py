@@ -14,7 +14,7 @@ def uniform_decision_stumps(M, d, min_v, max_v, initialization):
         sigs = torch.ones((d, M * 2))
     elif initialization == 'rand':
         sigs = torch.rand((d, M * 2))
-    sigs[..., M:] = -1 # first M*d stumps return one class, last M*d return the other
+    sigs[..., M:] *= -1 # first M*d stumps return one class, last M*d return the other
 
     stumps = lambda x: stumps_predict(x, torch.cat((thresholds, thresholds), 1), sigs)
 
