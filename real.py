@@ -21,6 +21,7 @@ from data.datasets import Dataset, TorchDataset
 from models.majority_vote import MultipleMajorityVote, MajorityVote
 from models.random_forest import two_forests
 from models.stumps import uniform_decision_stumps
+from Cbound.launcher import C_bound_optimization
 
 from optimization import stochastic_routine
 
@@ -33,10 +34,7 @@ def main(cfg):
 
     ROOT_DIR = Path(ROOT_DIR)
 
-    if cfg.model.uniform:
-        ROOT_DIR /= "uniform"
-    else:
-        ROOT_DIR /= f"lr={cfg.training.lr}/batch-size={cfg.training.batch_size}/"
+    ROOT_DIR /= f"lr={cfg.training.lr}/batch-size={cfg.training.batch_size}/"
 
     if cfg.training.risk == "MC":
         ROOT_DIR /= f"MC={cfg.training.MC_draws}"
@@ -53,6 +51,7 @@ def main(cfg):
         "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=2), 4., distribution_name, 2., 'KL'),
         "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n_classes, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
         "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'Renyi'),
+        "Cbound": (None, None, distribution_name, None, None),
     }
 
     train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
@@ -156,42 +155,47 @@ def main(cfg):
             # init learning rate scheduler
             lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
 
-            # First training phase
-            model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
-            if cfg.training.risk == "FO":
-                ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
-                deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution == "categorical" else 2
-
-                # Results are compiled in the 'seed_results' dictionary
-                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune.item(), triple_bound_no_finetune.item(), ben_triple_bound_no_finetune.item())
-
-                # Cropping the weight of base predictors that barely have an effect on the prediction
-                if cfg.training.distribution == "gaussian" and n_classes > 2:
-                    ben_bound_with_finetune = ben_bound_no_finetune
-                    triple_bound_with_finetune = triple_bound_no_finetune
-                    ben_triple_bound_with_finetune = ben_triple_bound_no_finetune
-                else:
-                    model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
-                    model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
-                    ben_bound_with_finetune, triple_bound_with_finetune, ben_triple_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
-
-                # Results are compiled in the 'seed_results' dictionary
-                seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune.item(), triple_bound_with_finetune.item(), ben_triple_bound_with_finetune.item(), i)
-            elif cfg.training.risk in ["Triple", "Tr"]:
-                optimizer = Adam(model.parameters(), lr=cfg.training.lr / 10)
-                # init learning rate scheduler
-                lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
-                loss, bound_coeff, distribution_type, kl_factor, div = (lambda x, y, z: triple_loss(x, y, z, distribution_name, n_classes), 1., distribution_name, 1., 'KL')
-                if cfg.bound.stochastic:
-                    bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
-                else:
-                    bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
-                model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
-                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
-                seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
+            if cfg.training.risk == "Cbound":
+                Cbound, train_error, test_error, time = C_bound_optimization(cfg, data.X_train, data.y_train, data.X_test, data.y_test)
+                seed_results["deterministic_bound"] = Cbound
+                seed_results["train-error"] = train_error
+                seed_results["test-error"] = test_error
+                seed_results["time"] = time
+                final_bound = {'bound': Cbound}
             else:
-                seed_results = updating_first_seed_results(seed_results, time, model, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
-                seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
+                # First training phase
+                model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                if cfg.training.risk == "FO":
+                    ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
+                    deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution == "categorical" else 2
+
+                    # Results are compiled in the 'seed_results' dictionary
+                    seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune.item(), triple_bound_no_finetune.item(), ben_triple_bound_no_finetune.item())
+
+                    # Cropping the weight of base predictors that barely have an effect on the prediction
+                    if cfg.training.distribution == "gaussian" and n_classes > 2:
+                        ben_bound_with_finetune = ben_bound_no_finetune
+                        triple_bound_with_finetune = triple_bound_no_finetune
+                        ben_triple_bound_with_finetune = ben_triple_bound_no_finetune
+                    else:
+                        model = crop_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name)
+                        model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
+                        ben_bound_with_finetune, triple_bound_with_finetune, ben_triple_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
+
+                    # Results are compiled in the 'seed_results' dictionary
+                    seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune.item(), triple_bound_with_finetune.item(), ben_triple_bound_with_finetune.item(), i)
+                elif cfg.training.risk in ["Triple", "Tr"]:
+                    optimizer = Adam(model.parameters(), lr=cfg.training.lr / 10)
+                    # init learning rate scheduler
+                    lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
+                    loss, bound_coeff, distribution_type, kl_factor, div = (lambda x, y, z: triple_loss(x, y, z, distribution_name, n_classes), 1., distribution_name, 1., 'KL')
+                    if cfg.bound.stochastic:
+                        bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
+                    else:
+                        bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
+                    model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                    seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
+                    seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
 
             print(f"Test error: {round(seed_results['test-error'], 4)};\t Deterministic: {round(final_bound['bound'], 4)}.")
 
@@ -205,11 +209,10 @@ def main(cfg):
 
         train_errors.append(seed_results["train-error"])
         test_errors.append(seed_results["test-error"])
-        kls.append(seed_results["KL"])
         bounds.append(seed_results["deterministic_bound"])
         times.append(seed_results["time"])
 
-    results = {"train-error": (np.mean(train_errors), np.std(train_errors)),"test-error": (np.mean(test_errors), np.std(test_errors)), cfg.bound.type: (np.mean(bounds), np.std(bounds)), "time": (np.mean(times), np.std(times)), "KL": (np.mean(kls), np.std(kls))}
+    results = {"train-error": (np.mean(train_errors), np.std(train_errors)),"test-error": (np.mean(test_errors), np.std(test_errors)), cfg.bound.type: (np.mean(bounds), np.std(bounds)), "time": (np.mean(times), np.std(times))}
 
     np.save(ROOT_DIR / "err-b.npy", results)
 

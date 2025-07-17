@@ -26,7 +26,7 @@ def whether_to_run_run(cfg):
     if cfg.training.risk == "Bin":
         assert cfg.training.rand_n > 0
 
-def updating_first_seed_results(seed_results, time, model, train_err, test_err, deterministic_bound, final_bound, ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune):
+def updating_first_seed_results(seed_results, time, train_err, test_err, deterministic_bound, final_bound, ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune):
     seed_results["train-error"] = train_err['error']
     seed_results["test-error"] = test_err['error']
     seed_results["test-error_sampled"] = test_err['error_sampled']
@@ -38,8 +38,6 @@ def updating_first_seed_results(seed_results, time, model, train_err, test_err, 
     seed_results["triple_bound_no_finetune"] = triple_bound_no_finetune
     seed_results["ben_triple_bound_no_finetune"] = ben_triple_bound_no_finetune
     seed_results["time"] = time
-    seed_results["posterior"] = model.get_post().detach().numpy()
-    seed_results["KL"] = model.KL().item()
     return seed_results
 
 def updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune, triple_bound_with_finetune, ben_triple_bound_with_finetune, i):
