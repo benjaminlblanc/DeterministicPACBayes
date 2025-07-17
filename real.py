@@ -196,6 +196,9 @@ def main(cfg):
                     model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
+                else:
+                    seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
+                    seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
 
             print(f"Test error: {round(seed_results['test-error'], 4)};\t Deterministic: {round(final_bound['bound'], 4)}.")
 
