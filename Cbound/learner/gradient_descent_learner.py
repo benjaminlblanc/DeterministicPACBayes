@@ -201,7 +201,7 @@ class GradientDescentLearner(BaseEstimator, ClassifierMixin):
                 device=self.device, dtype=torch.float32)
 
             self.mv_diff(batch)
-            pred_ = self.mv_diff.pred.detach().numpy()
+            pred_ = self.mv_diff.pred.detach().cpu().numpy()
 
             if(pred is None):
                 pred = pred_

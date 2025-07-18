@@ -28,7 +28,7 @@ def C_bound_optimization(cfg, x_train, y_train, x_test, y_test):
         return x_train, y_train, majority_vote
 
     voter = "decision stumps"
-    epoch_dict = {"decision stumps": 1000, "decision trees": 100}
+    epoch_dict = {"decision stumps": 1000}
 
     # ----------------------------------------------------------------------- #
     if len(y_train.shape) == 1:
