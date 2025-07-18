@@ -221,7 +221,10 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     test_error = test_routine(testloader, best_model)
     final_bound = {'bound': best_bound}
 
-    triple_bnd = compute_bound(model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, distribution_name, n_classes), False)
+    if risk_type == "FO":
+        triple_bnd = compute_bound(model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, distribution_name, n_classes), False)
+    else:
+        triple_bnd = (None, None, None)
 
     if risk_type in ['FO', 'Dis_Renyi']:
         test_errors = []
