@@ -1,6 +1,10 @@
 import hydra
 from pathlib import Path
+
+from torch.utils.data import DataLoader
+
 import wandb
+
 wandb.login()
 
 import numpy as np
@@ -8,7 +12,6 @@ import torch
 
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import DataLoader
 
 from core.deterministic_bounding import crop_weak_learners, compute_det_bound, manual_model_finetune
 from core.wandb_formatting import create_config_dico, create_run_name
@@ -120,22 +123,6 @@ def main(cfg):
                     bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
                     test_bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
-            if cfg.model.pred == "rf": # a loader per posterior
-
-                m_train = len(data.X_train) // 2
-                train1 = TorchDataset(data.X_train[m_train:], data.y_train[m_train:])
-                train2 = TorchDataset(data.X_train[:m_train], data.y_train[:m_train])
-                trainloader = [
-                    DataLoader(train1, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers, shuffle=True),
-                    DataLoader(train2, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers, shuffle=True)
-                ]
-
-            else:
-                train = TorchDataset(data.X_train, data.y_train)
-                trainloader = DataLoader(train, batch_size=cfg.training.batch_size, num_workers=cfg.num_workers, shuffle=True)
-
-            testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096, num_workers=cfg.num_workers, shuffle=False)
-
             prior_coefficient = 1 / M if cfg.model.prior == "adjusted" else int(cfg.model.prior)
             prior_value = -5 if cfg.training.distribution == "categorical" else prior_coefficient
 
@@ -149,6 +136,31 @@ def main(cfg):
                 betas = torch.ones(M) * prior_coefficient # prior
 
                 model = MajorityVote(predictors, betas, a, n_classes, distr=distribution_type, kl_factor=kl_factor)
+
+            if cfg.model.pred == "rf":  # a loader per posterior
+                m_train = len(data.X_train) // 2
+                data.X_train = model.voters_forward([data.X_train[m_train:], data.X_train[:m_train]])
+
+                train1 = TorchDataset(data.X_train[0], data.y_train[m_train:])
+                train2 = TorchDataset(data.X_train[1], data.y_train[:m_train])
+
+                trainloader = [
+                    DataLoader(train1, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers,
+                               shuffle=True),
+                    DataLoader(train2, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers,
+                               shuffle=True)
+                ]
+
+                testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096,
+                                        num_workers=cfg.num_workers, shuffle=False)
+            else:
+                data.X_train = model.voters_forward(torch.tensor(data.X_train))
+                data.X_test = model.voters_forward(torch.tensor(data.X_test))
+                train = TorchDataset(data.X_train, data.y_train)
+                trainloader = DataLoader(train, batch_size=cfg.training.batch_size, num_workers=cfg.num_workers,
+                                         shuffle=True)
+                testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096,
+                                        num_workers=cfg.num_workers, shuffle=False)
 
             monitor = MonitorMV(SAVE_DIR)
             optimizer = Adam(model.parameters(), lr=cfg.training.lr)

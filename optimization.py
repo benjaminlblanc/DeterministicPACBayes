@@ -153,10 +153,14 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
     for batches in zip(*dataloaders):
         X = [batch[0] for batch in batches]
-        pred = model(X)
-        data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-
-        risk += model.risk(data, loss=loss, mean=False)
+        try:
+            pred = model(X)
+            data = [(batches[i][1], pred[i]) for i in range(len(batches))]
+            risk += model.risk(data, loss=loss, mean=False)
+        except RuntimeError:
+            pred = model.voters_forward(X)
+            data = [(batches[i][1], pred[i]) for i in range(len(batches))]
+            risk += model.risk(data, loss=loss, mean=False)
         strength += sum(model.voter_strength(data))
 
         n += len(X[0])

@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 
 from core.distributions import distr_dict
@@ -35,6 +34,9 @@ class MajorityVote(torch.nn.Module):
         self.kl_factor = kl_factor
 
     def forward(self, x):
+        return x
+
+    def voters_forward(self, x):
         return self.voters(x)
 
     def risk(self, batch, loss=None, mean=True):
@@ -119,7 +121,11 @@ class MultipleMajorityVote(torch.nn.Module):
 
     def forward(self, xs):
 
-        return [mv(x) for mv, x in zip(self.mvs, xs)]
+        return [mv.forward(x) for mv, x in zip(self.mvs, xs)]
+
+    def voters_forward(self, xs):
+
+        return [mv.voters_forward(x) for mv, x in zip(self.mvs, xs)]
 
     def risk(self, batchs, loss=None, mean=True):
 
