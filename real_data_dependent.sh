@@ -22,9 +22,6 @@ do
     python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.1 training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb training.rand_n=$r_n training.seed=$seed
   done
 
-  r=Cbound
-  python3 real.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.1 training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb training.seed=$seed
-
   r=Dis_Renyi
   for ordr in 1.05 1.5 2 5 10
   do
