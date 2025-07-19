@@ -30,7 +30,7 @@ bash real.sh
 
 You can also run a specific experiment, passing the chosen values for the hyper-parameters as follows:
 ```bash
-python3 real.py dataset=SENSORLESS model.M=100 training.risk=MC model.pred=rf model.prior=2 model.tree_depth=5
+python3 training.py dataset=SENSORLESS model.M=100 training.risk=MC model.pred=rf model.prior=2 model.tree_depth=5
 ```
 
 ### Minimal script

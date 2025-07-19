@@ -1,9 +1,13 @@
+import pickle
+
 import numpy as np
 import gzip
 import shutil
 import tarfile
 import os
 import pandas as pd
+import torch
+from torchvision import transforms
 
 import warnings
 
@@ -204,6 +208,108 @@ def fetch_MNIST(path, valid_size=0.2, test_size=0.2, seed=None):
     Y = np.hstack((y_train, y_test))
     X_train, X_test, y_train, y_test = train_test_split(np.vstack((X_train, X_test)), Y, stratify=Y, test_size=test_size, random_state=seed)
     
+    X_val, y_val = get_validation_set(X_train, y_train, valid_size, seed)
+
+    return dict(
+        X_train=X_train, y_train=y_train, X_valid=X_val, y_valid=y_val, X_test=X_test, y_test=y_test
+    )
+
+
+def fetch_CIFAR10(path, valid_size=0.2, test_size=0.2, seed=None):
+    path = Path(path)
+    train_path = path / 'cifar-10-python.tar.gz'
+    test_path = path / 'cifar-10-python.tar.gz'
+
+    if not train_path.exists() or not test_path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+
+        download('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', train_path)
+        download('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', test_path)
+
+    # Extract and load data
+    with tarfile.open(train_path, 'r:gz') as tar:
+        tar.extractall(path)
+
+    def unpickle(file):
+        with open(file, 'rb') as fo:
+            dict = pickle.load(fo, encoding='bytes')
+        return dict
+
+    # Load training data
+    train_dict = unpickle(path / 'cifar-10-python' / 'train')
+    X_train_full = train_dict[b'data'].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
+    y_train_full = np.array(train_dict[b'fine_labels'])
+
+    # Load test data
+    test_dict = unpickle(path / 'cifar-10-python' / 'test')
+    X_test = test_dict[b'data'].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
+    y_test = np.array(test_dict[b'fine_labels'])
+
+    # Normalize
+    X_train_full = X_train_full.astype('float32') / 255.0
+    X_test = X_test.astype('float32') / 255.0
+
+    Y = np.hstack((y_train_full, y_test))
+    X_train, X_test, y_train, y_test = train_test_split(np.vstack(
+        (X_train_full, X_test)), Y, stratify=Y, test_size=test_size, random_state=seed)
+
+    X_val, y_val = get_validation_set(X_train, y_train, valid_size, seed)
+
+    return dict(
+        X_train=X_train, y_train=y_train, X_valid=X_val, y_valid=y_val, X_test=X_test, y_test=y_test
+    )
+
+def fetch_CIFAR100(path, valid_size=0.2, test_size=0.2, seed=None):
+
+    path = Path(path)
+    train_path = path / 'cifar-100-python.tar.gz'
+    test_path = path / 'cifar-100-python.tar.gz'
+
+    if not train_path.exists() or not test_path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+
+        download('https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz', train_path)
+        download('https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz', test_path)
+
+    # Extract and load data
+    with tarfile.open(train_path, 'r:gz') as tar:
+        tar.extractall(path)
+
+    def unpickle(file):
+        with open(file, 'rb') as fo:
+            dict = pickle.load(fo, encoding='bytes')
+        return dict
+
+    # Load training data
+    train_dict = unpickle(path / 'cifar-100-python' / 'train')
+    X_train_full = train_dict[b'data'].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
+    y_train_full = np.array(train_dict[b'fine_labels'])
+
+    # Load test data
+    test_dict = unpickle(path / 'cifar-100-python' / 'test')
+    X_test = test_dict[b'data'].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
+    y_test = np.array(test_dict[b'fine_labels'])
+
+    # Normalize
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+
+    #X_train_full = transforms.functional.to_pil_image(X_train_full, mode=None)
+    X_train_full = preprocess(torch.tensor(X_train_full[:100]))
+    X_test = preprocess(torch.tensor(X_test[:100]))
+
+    #X_train_full = X_train_full.astype('float32') / 255.0
+    #X_test = X_test.astype('float32') / 255.0
+
+    Y = np.hstack((y_train_full, y_test))
+    X_train, X_test, y_train, y_test = train_test_split(np.vstack(
+        (X_train_full, X_test)), Y, stratify = Y, test_size = test_size, random_state = seed)
+
     X_val, y_val = get_validation_set(X_train, y_train, valid_size, seed)
 
     return dict(

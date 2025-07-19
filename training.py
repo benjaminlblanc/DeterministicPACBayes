@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader
 
 import wandb
 
+from models.pretrainedDNN import pretrainedDNN
+
 wandb.login()
 
 import numpy as np
@@ -24,9 +26,9 @@ from data.datasets import Dataset, TorchDataset
 from models.majority_vote import MultipleMajorityVote, MajorityVote
 from models.random_forest import two_forests
 from models.stumps import uniform_decision_stumps
-from Cbound.launcher import C_bound_optimization
+from core.Cbound.launcher import C_bound_optimization
 
-from optimization import stochastic_routine, evaluate_multiset, evaluate
+from core.optimization import stochastic_routine, evaluate_multiset, evaluate
 
 
 @hydra.main(config_path='config/real.yaml')
@@ -83,7 +85,13 @@ def main(cfg):
             try:
                 data = Dataset(cfg.dataset.distr, n_train=cfg.dataset.N_train, n_test=cfg.dataset.N_test, noise=cfg.dataset.noise)
             except:
-                data = Dataset(cfg.dataset, normalize=True, data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
+                normalize = False if cfg.dataset in ["CIFAR10", "CIFAR100"] else True
+                data = Dataset(cfg.dataset, normalize=normalize, data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
+
+            data.X_train = data.X_train[:200]
+            data.X_test = data.X_test[:200]
+            data.y_train = data.y_train[:200]
+            data.y_test = data.y_test[:200]
 
             if cfg.model.pred == "stumps-uniform":
                 predictors, M = uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0), cfg.model.stump_init)
@@ -96,7 +104,7 @@ def main(cfg):
                 predictors, M = two_forests(cfg.model.M, 0.5, data.X_train, data.y_train, max_samples=cfg.model.bootstrap, max_depth=cfg.model.tree_depth, binary=data.binary)
 
             else:
-                raise NotImplementedError("model.pred should be one the following: [stumps-uniform, rf]")
+                M = 1
 
             loss, bound_coeff, distribution_type, kl_factor, div = risks[cfg.training.risk]
             a = cfg.model.a
@@ -132,10 +140,37 @@ def main(cfg):
                 # weights proportional to data sizes
                 model = MultipleMajorityVote(predictors, betas, a, n_classes, weights=(0.5, 0.5), distr=distribution_type, kl_factor=kl_factor)
 
-            else:
+            elif cfg.model.pred == "stumps-uniform":
                 betas = torch.ones(M) * prior_coefficient # prior
 
                 model = MajorityVote(predictors, betas, a, n_classes, distr=distribution_type, kl_factor=kl_factor)
+
+            else:
+                embedding = pretrainedDNN(cfg.model.pred)
+
+                # If needed, we reshape the images
+                data.X_train = torch.tensor(data.X_train, dtype=torch.double)
+                data.X_test = torch.tensor(data.X_test, dtype=torch.double)
+
+                data.X_train = torch.reshape(data.X_train, (data.X_train.shape[0], 1, 28, 28))
+                data.X_test = torch.reshape(data.X_test, (data.X_test.shape[0], 1, 28, 28))
+
+                data.X_train = data.X_train.repeat(1, 3, 1, 1)
+                data.X_test = data.X_test.repeat(1, 3, 1, 1)
+
+                # Creating the data we will actually be working with
+                embedding = embedding.double()
+                data.X_train = embedding(data.X_train)
+                data.X_test = embedding(data.X_test)
+                print(data.X_train)
+
+                # Adding the bias
+                data.X_train = torch.hstack((data.X_train, torch.ones((data.X_train.shape[0], 1))))
+                data.X_test = torch.hstack((data.X_test, torch.ones((data.X_test.shape[0], 1))))
+
+                # Here, the model corresponds in a linear layer
+                model = torch.nn.Linear(data.X_train.shape[1], n_classes, bias=False)
+
 
             if cfg.model.pred == "rf":  # a loader per posterior
                 m_train = len(data.X_train) // 2
@@ -154,13 +189,14 @@ def main(cfg):
                 testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096,
                                         num_workers=cfg.num_workers, shuffle=False)
             else:
-                data.X_train = model.voters_forward(torch.tensor(data.X_train))
-                data.X_test = model.voters_forward(torch.tensor(data.X_test))
-                train = TorchDataset(data.X_train, data.y_train)
-                trainloader = DataLoader(train, batch_size=cfg.training.batch_size, num_workers=cfg.num_workers,
-                                         shuffle=True)
+                if cfg.model.pred == "stumps-uniform":
+                    data.X_train = model.voters_forward(torch.tensor(data.X_train))
+                    data.X_test = model.voters_forward(torch.tensor(data.X_test))
+                trainloader = DataLoader(TorchDataset(data.X_train, data.y_train), batch_size=cfg.training.batch_size,
+                                         num_workers=cfg.num_workers, shuffle=True)
                 testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096,
                                         num_workers=cfg.num_workers, shuffle=False)
+
 
             monitor = MonitorMV(SAVE_DIR)
             optimizer = Adam(model.parameters(), lr=cfg.training.lr)
@@ -176,7 +212,7 @@ def main(cfg):
                 final_bound = {'bound': Cbound}
             else:
                 # First training phase
-                model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                 if cfg.training.risk == "FO":
                     ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
                     deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution == "categorical" else 2
@@ -194,15 +230,15 @@ def main(cfg):
                         model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
                         ben_bound_with_finetune, triple_bound_with_finetune, ben_triple_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
 
-                    # We need to recompute the train and test error
-                    if n_classes > 2:
-                        val_routine = evaluate_multiset
-                        test_routine = lambda d, *args, **kwargs: evaluate_multiset((d, d), *args, **kwargs)
-                    else:
-                        val_routine = evaluate
-                        test_routine = evaluate
-                    train_error = val_routine(trainloader, model)
-                    test_error = test_routine(testloader, model)
+                        # We need to recompute the train and test error
+                        if n_classes > 2:
+                            val_routine = evaluate_multiset
+                            test_routine = lambda d, *args, **kwargs: evaluate_multiset((d, d), *args, **kwargs)
+                        else:
+                            val_routine = evaluate
+                            test_routine = evaluate
+                        train_error = val_routine(trainloader, model)
+                        test_error = test_routine(testloader, model)
 
                     # Results are compiled in the 'seed_results' dictionary
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune.item(), triple_bound_with_finetune.item(), ben_triple_bound_with_finetune.item(), i)
@@ -215,7 +251,7 @@ def main(cfg):
                         bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
                     else:
                         bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
-                    model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                    model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
                 else:

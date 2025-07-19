@@ -85,12 +85,14 @@ def get_n_classes(dataset):
         return 3
     elif dataset == "SHUTTLE":
         return 7
-    elif dataset in ["MNIST", "FASHION"]:
+    elif dataset in ["CIFAR10", "FASHION", "MNIST"]:
         return 10
     elif dataset == "SENSORLESS":
         return 11
     elif dataset == "PENDIGITS":
         return 12
+    elif dataset == "CIFAR100":
+        return 100
     assert False, "Incorrect dataset"
 
 def deterministic(random_state):

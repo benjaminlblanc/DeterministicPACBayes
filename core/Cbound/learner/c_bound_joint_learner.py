@@ -2,8 +2,8 @@ import cvxpy as cp
 import math
 import torch
 
-from Cbound.core.cocob_optim import COCOB
-from Cbound.learner.gradient_descent_learner import GradientDescentLearner
+from core.Cbound.core.cocob_optim import COCOB
+from core.Cbound.learner.gradient_descent_learner import GradientDescentLearner
 
 ###############################################################################
 
