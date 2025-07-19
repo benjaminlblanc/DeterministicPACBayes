@@ -17,9 +17,11 @@ def triple_loss(y_target, y_pred, theta, distribution, n_classes):
     second_loss = torch.where(first_loss >= 0.5, first_loss, torch.zeros(1))
     third_loss = torch.where(first_loss < 0.5, first_loss, torch.zeros(1))
     if torch.sum(second_loss) == 0:
-        return first_loss, torch.tensor(0, dtype=torch.float), third_loss[third_loss.nonzero()]
+        if torch.sum(third_loss.nonzero()) == 0:
+            return first_loss, torch.tensor(0.5, dtype=torch.float), torch.tensor(0, dtype=torch.float)
+        return first_loss, torch.tensor(0.5, dtype=torch.float), third_loss[third_loss.nonzero()]
     elif torch.sum(third_loss) == 0:
-        return first_loss, second_loss[second_loss.nonzero()], torch.tensor(0.5, dtype=torch.float)
+        return first_loss, second_loss[second_loss.nonzero()], torch.tensor(0, dtype=torch.float)
     return first_loss, second_loss[second_loss.nonzero()], third_loss[third_loss.nonzero()]
 
 def bin_loss(y_target, y_pred, theta, distribution, n_classes, n=100):
