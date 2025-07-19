@@ -161,7 +161,7 @@ def value_to_one_hot(values, n_classes):
 def create_mu(theta, y_pred, i):
     w = theta.reshape(1, len(theta))
     y_pred_minus_y_i = y_pred - y_pred[:, :, [i]]
-    mu_full = torch.matmul(w, torch.transpose(y_pred_minus_y_i, 0, 2)).squeeze().T
+    mu_full = torch.matmul(w, torch.transpose(y_pred_minus_y_i, 0, 2)).squeeze(1).T
     correct_indexes = torch.arange(len(mu_full[0]))!=i
     return mu_full[:, correct_indexes], y_pred_minus_y_i[:, :, correct_indexes]
 
