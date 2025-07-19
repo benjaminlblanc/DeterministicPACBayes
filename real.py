@@ -26,7 +26,7 @@ from models.random_forest import two_forests
 from models.stumps import uniform_decision_stumps
 from Cbound.launcher import C_bound_optimization
 
-from optimization import stochastic_routine
+from optimization import stochastic_routine, evaluate_multiset
 
 
 @hydra.main(config_path='config/real.yaml')
@@ -176,7 +176,7 @@ def main(cfg):
                 final_bound = {'bound': Cbound}
             else:
                 # First training phase
-                model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                 if cfg.training.risk == "FO":
                     ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
                     deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution == "categorical" else 2
@@ -194,6 +194,12 @@ def main(cfg):
                         model = manual_model_finetune(model, n, bound, trainloader, loss, distribution_name)
                         ben_bound_with_finetune, triple_bound_with_finetune, ben_triple_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
 
+                    # We need to recompute the train and test error
+                    val_routine = evaluate_multiset
+                    test_routine = lambda d, *args, **kwargs: evaluate_multiset((d, d), *args, **kwargs)
+                    train_error = val_routine(trainloader, model)
+                    test_error = test_routine(testloader, model)
+
                     # Results are compiled in the 'seed_results' dictionary
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, ben_bound_with_finetune.item(), triple_bound_with_finetune.item(), ben_triple_bound_with_finetune.item(), i)
                 elif cfg.training.risk in ["Triple", "Tr"]:
@@ -205,7 +211,7 @@ def main(cfg):
                         bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
                     else:
                         bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
-                    model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                    model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
                 else:

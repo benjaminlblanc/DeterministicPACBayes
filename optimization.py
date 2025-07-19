@@ -252,4 +252,4 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
 
     print(f"Test error: {test_error['error']}; {bound_type} bound: {best_train_stats[bound_type]}\n")
 
-    return best_model, final_bound, best_train_stats, train_error, test_error, t2 - t1, triple_bnd[0], triple_bnd[1]
+    return best_model, final_bound, train_error, test_error, t2 - t1, triple_bnd[0], triple_bnd[1]
