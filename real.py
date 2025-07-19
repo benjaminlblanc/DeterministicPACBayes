@@ -26,7 +26,7 @@ from models.random_forest import two_forests
 from models.stumps import uniform_decision_stumps
 from Cbound.launcher import C_bound_optimization
 
-from optimization import stochastic_routine, evaluate_multiset
+from optimization import stochastic_routine, evaluate_multiset, evaluate
 
 
 @hydra.main(config_path='config/real.yaml')
@@ -195,8 +195,12 @@ def main(cfg):
                         ben_bound_with_finetune, triple_bound_with_finetune, ben_triple_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
 
                     # We need to recompute the train and test error
-                    val_routine = evaluate_multiset
-                    test_routine = lambda d, *args, **kwargs: evaluate_multiset((d, d), *args, **kwargs)
+                    if n_classes > 2:
+                        val_routine = evaluate_multiset
+                        test_routine = lambda d, *args, **kwargs: evaluate_multiset((d, d), *args, **kwargs)
+                    else:
+                        val_routine = evaluate
+                        test_routine = evaluate
                     train_error = val_routine(trainloader, model)
                     test_error = test_routine(testloader, model)
 
