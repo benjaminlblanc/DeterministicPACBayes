@@ -208,7 +208,7 @@ def purge_redundant_variables(y_pred_minus_y_i, mu, Sigma):
 def is_psd(mat):
     return bool((mat == mat.T).all() and (torch.linalg.eigvals(mat).real>=0).all())
 
-def multinomial_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
+def mv_gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
     cdfs = []
     for i in range(n_classes):
         y_target_is_i = (y_target == i).squeeze()

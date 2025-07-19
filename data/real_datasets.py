@@ -2,23 +2,14 @@ import pickle
 
 import numpy as np
 import gzip
-import shutil
 import tarfile
-import os
 import pandas as pd
 import torch
 from torchvision import transforms
 
-import warnings
-
 from pathlib import Path
-
-from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
-
-from category_encoders import LeaveOneOutEncoder
 from category_encoders.ordinal import OrdinalEncoder
-
 from data.utils import get_validation_set, download, read_idx_file
 # BINARY CLASSIFICATION
 

@@ -51,11 +51,11 @@ def main(cfg):
     n_classes = get_n_classes(cfg.dataset)
     risks = { # type: (loss, bound_coeff, distribution_type, kl_factor, div)
         "Tr": (lambda x, y, z: true_loss(x, y, z, distribution_name), 1., distribution_name, 1., 'KL'),
-        "Triple": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),
-        "FO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
-        "SO": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=2), 4., distribution_name, 2., 'KL'),
-        "Bin": (lambda x, y, z: bin_loss(x, y, z, distribution_name, n_classes, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
-        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'Renyi'),
+        "Triple": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),
+        "FO": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
+        "SO": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=2), 4., distribution_name, 2., 'KL'),
+        "Bin": (lambda x, y, z: bin_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
+        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'Renyi'),
         "Cbound": (None, None, distribution_name, None, None),
     }
 
@@ -162,14 +162,17 @@ def main(cfg):
                 embedding = embedding.double()
                 data.X_train = embedding(data.X_train)
                 data.X_test = embedding(data.X_test)
-                print(data.X_train)
 
                 # Adding the bias
                 data.X_train = torch.hstack((data.X_train, torch.ones((data.X_train.shape[0], 1))))
                 data.X_test = torch.hstack((data.X_test, torch.ones((data.X_test.shape[0], 1))))
 
+               # Finally: remove the current gradient from the examples
+                data.X_train = data.X_train.detach()
+                data.X_test = data.X_test.detach()
+
                 # Here, the model corresponds in a linear layer
-                model = torch.nn.Linear(data.X_train.shape[1], n_classes, bias=False)
+                model = torch.nn.Linear(data.X_train.shape[1], n_classes, bias=False, dtype=torch.double)
 
 
             if cfg.model.pred == "rf":  # a loader per posterior
@@ -212,7 +215,7 @@ def main(cfg):
                 final_bound = {'bound': Cbound}
             else:
                 # First training phase
-                model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                 if cfg.training.risk == "FO":
                     ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
                     deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution == "categorical" else 2
@@ -251,7 +254,7 @@ def main(cfg):
                         bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
                     else:
                         bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
-                    model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, true_risk_bounding=False, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                    model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
                 else:

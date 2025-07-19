@@ -8,33 +8,7 @@ from core.losses import triple_loss
 from models.majority_vote import MultipleMajorityVote
 
 
-def train_batch(n, data, model, optimizer, bound=None, loss=None, nb_iter=1e4, monitor=None, true_risk_bounding=False):
-
-    model.train()
-    pbar = tqdm(range(int(nb_iter)))
-    for i in pbar:
-        optimizer.zero_grad()
-
-        n_alphas = len(model.post)
-
-        if bound is not None:
-            if true_risk_bounding:
-                cost = compute_det_bound(model, bound, n, n_alphas, data, loss, model.distribution_name)[2]
-            else:
-                cost = bound(n, model, model.risk(data, loss))
-
-        else:
-            cost = model.risk(data, loss)
-
-        pbar.set_description("train obj %s" % cost.item())
-        cost.backward()
-        optimizer.step()
-
-        if monitor:
-            monitor.write_all(i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
-
-
-def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None, monitor=None, true_risk_bounding=False):
+def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None, monitor=None):
 
     model.train()
 
@@ -50,11 +24,7 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
         n_alphas = len(model.post)
 
         if bound is not None:
-            if true_risk_bounding:
-                cur_PB_bound = bound(n, model, model.risk(data, loss), sample=False)
-                cost = compute_det_bound(model, bound, n, n_alphas, data, loss, model.distribution_name, cur_PB_bound)[2]
-            else:
-                cost = bound(n, model, model.risk(data, loss), sample=False)
+            cost = bound(n, model, model.risk(data, loss), sample=False)
 
         else:
             cost = model.risk(data, loss)
@@ -181,7 +151,7 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
 
 def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, risk_type, n, loss=None, monitor=None,
-                       num_epochs=100, lr_scheduler=None, true_risk_bounding=False, test_bound=None, distribution_name='', n_classes=0):
+                       num_epochs=100, lr_scheduler=None, test_bound=None, distribution_name='', n_classes=0):
 
     best_bound = float("inf")
     best_model = deepcopy(model)
@@ -199,7 +169,7 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
 
     pbar = tqdm(range(num_epochs))
     for e in pbar:
-        train_routine(trainloader, model, optimizer, epoch=e, bound=bound, loss=loss, monitor=monitor, true_risk_bounding=true_risk_bounding)
+        train_routine(trainloader, model, optimizer, epoch=e, bound=bound, loss=loss, monitor=monitor)
 
         train_stats = val_routine(trainloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train")  # just for monitoring purposes
 

@@ -1,6 +1,6 @@
 name=DeterministicPACBayes
-wandb=True
-prd=resnet152
+wandb=False
+prd=resnet18
 trials=5
 seed=541944
 
