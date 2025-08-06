@@ -168,7 +168,7 @@ def main(cfg):
             lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
 
             if cfg.training.risk == "Cbound":
-                Cbound, train_error, test_error, time = C_bound_optimization(cfg, data.X_train, data.y_train, data.X_test, data.y_test)
+                Cbound, train_error, test_error, time = C_bound_optimization(cfg, data.X_train.numpy(), data.y_train, data.X_test.numpy(), data.y_test)
                 seed_results["deterministic_bound"] = Cbound
                 seed_results["train-error"] = train_error
                 seed_results["test-error"] = test_error
