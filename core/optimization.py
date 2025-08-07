@@ -69,7 +69,7 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
             monitor.write_all(last_iter + i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
 
 
-def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):
+def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, centered=True, tag="val"):
     model.eval()
 
     risk = 0.
@@ -79,7 +79,7 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
 
     for batch in dataloader:
         data = batch[1], model(batch[0])
-        model_risk = model.risk(data, loss=loss, mean=False)
+        model_risk = model.risk(data, loss=loss, mean=False, centered=centered)
         strength += sum(model.voter_strength(data))
         if type(model_risk) != tuple:
             risk += model_risk
@@ -114,30 +114,26 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
     return total_metrics
 
 
-def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):
+def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, monitor=None, centered=True, tag="val"):
     model.eval()
 
     risk = 0.
     n = 0
-    strength = 0.
 
     for batches in zip(*dataloaders):
         X = [batch[0] for batch in batches]
         try:
             pred = model(X)
             data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-            risk += model.risk(data, loss=loss, mean=False)
+            risk += model.risk(data, loss=loss, mean=False, centered=centered)
         except RuntimeError:
             pred = model.voters_forward(X)
             data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-            risk += model.risk(data, loss=loss, mean=False)
-        strength += sum(model.voter_strength(data))
-
+            risk += model.risk(data, loss=loss, mean=False, centered=centered)
         n += len(X[0])
 
     risk /= n
-    strength /= n
-    total_metrics = {"error": risk.item(), "strength": strength.item()}
+    total_metrics = {"error": risk.item()}
 
     if bounds is not None:
 
@@ -161,7 +157,7 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     if isinstance(model, MultipleMajorityVote):  # then expect multiple dataloaders
         train_routine = train_stochastic_multiset
         val_routine = evaluate_multiset
-        test_routine = lambda d, *args, **kwargs: evaluate_multiset((d, d), *args, **kwargs)
+        test_routine = evaluate_multiset
     else:
         train_routine, val_routine, test_routine = train_stochastic, evaluate, evaluate
 
@@ -207,7 +203,7 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
         best_model_post = best_model.get_post()
         for i in range(20):
             model_to_try.random_draw_new_post()
-            test_errors.append(test_routine(testloader, model_to_try)['error'])
+            test_errors.append(test_routine(testloader, model_to_try, centered=False)['error'])
             bounds.append(compute_bound(model_to_try, bound, n, trainloader, loss, True))
             model_to_try.set_post(best_model_post)
         test_error['error_sampled'] = torch.mean(torch.tensor(test_errors)).item()

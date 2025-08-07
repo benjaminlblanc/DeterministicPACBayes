@@ -75,6 +75,10 @@ def log_prob_bin(k, n, r):
 def find_ns(risks, n):
     if risks[1] == risks[2]:
         return n, n // 2, n // 2
+    elif risks[1] == 0:
+        return n, 1, n-1
+    elif risks[2] == 0.5:
+        return n, n-1, 1
     p = (risks[0] - risks[2]) / (risks[1] - risks[2])
     return n, max(int(p * n), 1), max(int((1-p) * n), 1)
 
@@ -85,12 +89,10 @@ def get_n_classes(dataset):
         return 3
     elif dataset == "SHUTTLE":
         return 7
-    elif dataset in ["CIFAR10", "FASHION", "MNIST"]:
+    elif dataset in ["CIFAR10", "MNIST", "FASHION", "PENDIGITS"]:
         return 10
     elif dataset == "SENSORLESS":
         return 11
-    elif dataset == "PENDIGITS":
-        return 12
     elif dataset == "CIFAR100":
         return 100
     assert False, "Incorrect dataset"
@@ -208,7 +210,7 @@ def purge_redundant_variables(y_pred_minus_y_i, mu, Sigma):
 def is_psd(mat):
     return bool((mat == mat.T).all() and (torch.linalg.eigvals(mat).real>=0).all())
 
-def mv_gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
+def multinomial_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
     cdfs = []
     for i in range(n_classes):
         y_target_is_i = (y_target == i).squeeze()

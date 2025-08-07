@@ -3,96 +3,20 @@ from torch.distributions.dirichlet import Dirichlet as Dir
 from torch.distributions.multivariate_normal import MultivariateNormal as Gaus
 import torch.nn.functional as F
 from torch import lgamma, digamma
-from core.utils import BetaInc, Phi, mv_gaussian_cdf_precomputations
+from core.utils import value_to_one_hot
 
 
 def log_Beta(vec):
     return lgamma(vec).sum() - lgamma(vec.sum())
 
-
-class Categorical():
-
-    def __init__(self, theta, a, mc_draws=10):
-        self.theta = theta
-        self.mc_draws = mc_draws
-        self.a = a
-
-    def KL(self, beta):
-
-        t = self.get_theta()
-
-        b = beta / beta.sum()
-
-        return (t * torch.log(t / b)).sum()
-
-    def Renyi(self, beta, order):
-        t = self.get_theta()
-
-        b = beta / beta.sum()
-        return (1 / (order - 1)) * torch.log((t ** order / b ** (order - 1)).sum())
-
-    def KL_dis(self, beta):
-        t = self.get_theta()
-        assert (
-                           t ** 2).sum() == 1, 'To use KL_dis() on the Categorical distribution, the distribution must be centered on a one-hot vector.'
-
-        b = beta / beta.sum()
-        for i in range(len(t)):
-            if t[i] == 1:
-                return -torch.log(b[i])
-
-    def approximated_risk(self, batch, loss, mean=True):
-
-        t = self.get_theta()
-
-        y_target, y_pred = batch
-
-        r = loss(y_target, y_pred, t)
-
-        if type(r) == tuple:
-            if mean:
-                return torch.tensor([r[0].mean(), r[1].mean(), r[2].mean()])
-            return (r[0].sum(), r[1].sum(), r[2].sum()), (len(r[0]), len(r[1]), len(r[2]))
-
-        if mean:
-            return r.mean()
-        return r.sum()
-
-    def risk(self, batch, mean=True):
-
-        t = self.get_theta()
-
-        y_target, y_pred = batch
-
-        w_theta = torch.where(y_target != y_pred, t, torch.zeros(1)).sum(1)
-
-        r = (w_theta >= 0.5).float()
-
-        if mean:
-            return r.mean()
-
-        return r.sum()
-
-    def rsample(self):
-
-        cum_pro = torch.cumsum(self.get_theta(), dim=0)
-        cum_pro = torch.hstack((torch.zeros(1), cum_pro))
-        value = torch.rand(1)
-        for i in range(len(self.get_theta())):
-            if cum_pro[i] <= value <= cum_pro[i + 1]:
-                return F.one_hot(torch.tensor(i), num_classes=len(self.get_theta())).to(torch.float64) * 20
-
-    def get_theta(self):
-        return torch.nn.functional.softmax(self.theta, dim=0)
-
-
 class Dirichlet():
 
-    def __init__(self, alpha, a, mc_draws=10):
+    def __init__(self, alpha, a, n_classes, mc_draws=10):
 
         self.alpha = alpha
         self.mc_draws = mc_draws
         self.a = a
+        self.n_classes = n_classes
 
     # Kullback-Leibler divergence between two Dirichlets
     def KL(self, beta):
@@ -120,19 +44,18 @@ class Dirichlet():
 
         return res
 
-    def risk(self, batch, mean=True):
-        # 01-loss applied to batch
+    def risk(self, batch, mean=True, centered=None):
+        alpha = torch.exp(self.alpha)
         y_target, y_pred = batch
-        exp_alpha = torch.exp(self.alpha)
+        y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
+        weighted_preds = y_pred_oh.transpose(1, 2) * alpha
+        summed_preds = torch.sum(weighted_preds, dim=2)
+        agg_preds = torch.argmax(summed_preds, dim=1).reshape(-1, 1)
 
-        correct = torch.where(y_target == y_pred, exp_alpha, torch.zeros(1)).sum(1)
-        wrong = torch.where(y_target != y_pred, exp_alpha, torch.zeros(1)).sum(1)
-        
-        s = [BetaInc.apply(c, w, torch.tensor(0.5 + self.a / 2), torch.tensor(1)) for c, w in zip(correct, wrong)]
+        r = torch.where(y_target != agg_preds, torch.ones(1), torch.zeros(1))
         if mean:
-            return sum(s) / len(y_target)
-
-        return sum(s)
+            return r.mean()
+        return r.sum()
 
     def approximated_risk(self, batch, loss, mean=True):
 
@@ -191,19 +114,18 @@ class Gaussian():
 
         return res
 
-    def risk(self, batch, mean=True):
-        # 01-loss applied to batch
+    def risk(self, batch, mean=True, centered=None):
         y_target, y_pred = batch
-        if self.n_classes == 2:
-            inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(self.w, (1, -1)) * y_pred, dim=1)) / torch.sum(y_pred ** 2, dim=1) ** 0.5
-            s = Phi(inner_Phi)
-        else:
-            s = mv_gaussian_cdf_precomputations(y_pred, y_target, self.w, self.n_classes, torch.tensor(1))
+        y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
+        weighted_preds = y_pred_oh.transpose(1, 2) * self.w
+        summed_preds = torch.sum(weighted_preds, dim=2)
+        agg_preds = torch.argmax(summed_preds, dim=1).reshape(-1, 1)
+
+        r = torch.where(y_target != agg_preds, torch.ones(1), torch.zeros(1))
 
         if mean:
-            return sum(s) / len(y_target)
-
-        return sum(s)
+            return r.mean()
+        return r.sum()
 
 
     def approximated_risk(self, batch, loss, mean=True):
@@ -235,8 +157,83 @@ class Gaussian():
         return self.w
 
 
+class Categorical():
+
+    def __init__(self, theta, a, n_classes, mc_draws=10):
+        self.theta = theta
+        self.mc_draws = mc_draws
+        self.a = a
+        self.n_classes = n_classes
+        
+    def KL(self, beta):
+
+        t = self.get_theta()
+
+        b = beta / beta.sum()
+
+        return (t * torch.log(t / b)).sum()
+
+    def Renyi(self, beta, order):
+        t = self.get_theta()
+
+        b = beta / beta.sum()
+        return (1 / (order - 1)) * torch.log((t ** order / b ** (order - 1)).sum())
+
+    def KL_dis(self, beta):
+        t = self.get_theta()
+        assert (t ** 2).sum() == 1, 'To use KL_dis() on the Categorical distribution, the distribution must be centered on a one-hot vector.'
+
+        b = beta / beta.sum()
+        for i in range(len(t)):
+            if t[i] == 1:
+                return -torch.log(b[i])
+
+    def approximated_risk(self, batch, loss, mean=True):
+
+        t = self.get_theta()
+
+        y_target, y_pred = batch
+
+        r = loss(y_target, y_pred, t)
+
+        if type(r) == tuple:
+            if mean:
+                return torch.tensor([r[0].mean(), r[1].mean(), r[2].mean()])
+            return (r[0].sum(), r[1].sum(), r[2].sum()), (len(r[0]), len(r[1]), len(r[2]))
+
+        if mean:
+            return r.mean()
+        return r.sum()
+
+    def risk(self, batch, mean=True, centered=True):
+        theta = self.get_theta() if centered else self.theta
+        y_target, y_pred = batch
+        y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
+        weighted_preds = y_pred_oh.transpose(1, 2) * theta
+        summed_preds = torch.sum(weighted_preds, dim=2)
+        agg_preds = torch.argmax(summed_preds, dim=1).reshape(-1, 1)
+
+        r = torch.where(y_target != agg_preds, torch.ones(1), torch.zeros(1))
+
+        if mean:
+            return r.mean()
+        return r.sum()
+
+    def rsample(self):
+
+        cum_pro = torch.cumsum(self.get_theta(), dim=0)
+        cum_pro = torch.hstack((torch.zeros(1), cum_pro))
+        value = torch.rand(1)
+        for i in range(len(self.get_theta())):
+            if cum_pro[i] <= value <= cum_pro[i+1]:
+                return F.one_hot(torch.tensor(i), num_classes=len(self.get_theta())).to(torch.float64)
+
+    def get_theta(self):
+        return torch.nn.functional.softmax(self.theta, dim=0)
+
+
 distr_dict = {
-    "categorical": Categorical,
     "dirichlet": Dirichlet,
-    "gaussian": Gaussian
+    "gaussian": Gaussian,
+    "categorical": Categorical
 }
