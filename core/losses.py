@@ -44,8 +44,4 @@ def moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, ord
         elif distribution == 'categorical':
             return torch.where(y_target != y_pred, theta, torch.tensor(0.)).sum(1) ** order
     elif predictor in ["resnet18"] and distribution == 'gaussian':
-        if n_classes == 2:
-            inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(theta, (1, -1)) * y_pred, dim=1)) / torch.sum(y_pred ** 2, dim=1) ** 0.5
-            return Phi(inner_Phi) ** order
-        else:
-            return mv_gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, torch.tensor(order))
+        return None

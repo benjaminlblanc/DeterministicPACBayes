@@ -88,11 +88,6 @@ def main(cfg):
                 normalize = False if cfg.dataset in ["CIFAR10", "CIFAR100"] else True
                 data = Dataset(cfg.dataset, normalize=normalize, data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
 
-            data.X_train = data.X_train[:200]
-            data.X_test = data.X_test[:200]
-            data.y_train = data.y_train[:200]
-            data.y_test = data.y_test[:200]
-
             if cfg.model.pred == "stumps-uniform":
                 predictors, M = uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0), cfg.model.stump_init)
 
