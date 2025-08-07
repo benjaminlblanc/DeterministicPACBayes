@@ -1,5 +1,4 @@
 import torch
-from pathlib import Path
 
 from data.real_datasets import *
 from data.toy_datasets import *
@@ -21,13 +20,9 @@ MC_DATASETS = {
     'SENSORLESS': fetch_SENSORLESS,
     'SHUTTLE': fetch_SHUTTLE,
     'FASHION': fetch_FASHION_MNIST,
-    # 'USPS': fetch_USPS,
+    'CIFAR10': fetch_CIFAR10,
+    'CIFAR100': fetch_CIFAR100,
 }
-
-TOY_DATASETS = [
-    'normals',
-    'moons',
-]
 
 class Dataset:
 
@@ -58,13 +53,6 @@ class Dataset:
 
             self.binary = False
             data_dict = MC_DATASETS[dataset](path / dataset, valid_size=valid_size, **kwargs)
-            
-        elif dataset in TOY_DATASETS:
-
-            self.binary = True
-            data_dict = toy_dataset(name=dataset, valid_size=valid_size, **kwargs)
-            normalize = False
-            valid_size = 0
 
         else:
             raise NotImplementedError("Dataset not supported")

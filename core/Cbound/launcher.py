@@ -3,9 +3,9 @@ import warnings
 import numpy as np
 from time import time
 
-from Cbound.core.metrics import Metrics
-from Cbound.learner.c_bound_joint_learner import CBoundJointLearner
-from Cbound.voter.stump import DecisionStumpMV
+from core.Cbound.core.metrics import Metrics
+from core.Cbound.learner.c_bound_joint_learner import CBoundJointLearner
+from core.Cbound.voter.stump import DecisionStumpMV
 
 
 ###############################################################################

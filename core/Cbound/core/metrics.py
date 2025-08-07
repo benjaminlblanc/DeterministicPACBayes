@@ -5,7 +5,7 @@ import math
 import numpy as np
 
 from core.kl_inv import kl_inv
-from Cbound.voter.majority_vote import MajorityVote
+from core.Cbound.voter.majority_vote import MajorityVote
 
 ###############################################################################
 

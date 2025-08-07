@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from sklearn.base import BaseEstimator, ClassifierMixin
 
-from Cbound.voter.majority_vote import MajorityVote
+from core.Cbound.voter.majority_vote import MajorityVote
 
 ###############################################################################
 
