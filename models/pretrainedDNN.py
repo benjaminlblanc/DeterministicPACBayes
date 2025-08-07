@@ -14,10 +14,10 @@ def pretrainedDNN(pred):
         raise NotImplementedError("model.pred should be one the following: [stumps-uniform, rf, resnet152]")
     return model
 
-class MultiLinearClassifier(torch.nn.Module):
-
-    def __init__(self, voters, prior, a, n_classes, distr="dirichlet", kl_factor=1.):
-        if distr not in ["gaussian"]:
+class LinearMultiClassifier(torch.nn.Linear):
+    def __init__(self, input_size, output_size, bias, dtype, prior, distr="gaussian", kl_factor=1.):
+        super().__init__(input_size, output_size, bias=bias, dtype=dtype)
+        if distr != "gaussian":
             raise NotImplementedError
 
         self.num_voters = len(prior)
@@ -25,12 +25,8 @@ class MultiLinearClassifier(torch.nn.Module):
         self.post = torch.nn.Parameter(post, requires_grad=True)
 
         self.prior = prior
-        self.voters = voters
-        self.mc_draws = 0
-        self.a = a
-        self.n_classes = n_classes
-        self.distr_type = distr
-        self.distribution = Gaussian(self.post, self.a, self.n_classes, 0)
+        self.n_classes = output_size
+        self.distribution = Gaussian(self.post, self.n_classes)
         self.distribution_name = distr
         self.kl_factor = kl_factor
 
@@ -43,16 +39,6 @@ class MultiLinearClassifier(torch.nn.Module):
             return self.distribution.approximated_risk(batch, loss, mean)
 
         return self.distribution.risk(batch, mean)
-
-    def voter_strength(self, data):
-        """ expected accuracy of a voter of the ensemble"""
-        # import pdb; pdb.set_trace()
-
-        y_target, y_pred = data
-
-        l = torch.where(y_target == y_pred, torch.tensor(1.), torch.tensor(0.))
-
-        return l.mean(1)
 
     def KL(self):
 
@@ -77,7 +63,7 @@ class MultiLinearClassifier(torch.nn.Module):
 
         assert len(value) == self.num_voters
 
-        if self.distr_type == "categorical": # make sure params sum to 1
+        if self.distr_name == "categorical": # make sure params sum to 1
             self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.theta = self.post
 

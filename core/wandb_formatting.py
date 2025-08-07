@@ -16,7 +16,6 @@ def create_config_dico(cfg):
             'stump_init': cfg['model']['stump_init'],
             'bootstrap': cfg['model']['bootstrap'],
             'tree_depth': cfg['model']['tree_depth'],
-            'uniform': cfg['model']['uniform'],
             'seed': cfg['training']['seed'],
             'lr': cfg['training']['lr'],
             'batch_size': cfg['training']['batch_size'],
@@ -28,7 +27,6 @@ def create_config_dico(cfg):
             'dataset': dataset_name,
             'delta': cfg['bound']['delta'],
             'type':  cfg['bound']['type'],
-            'stochastic':  cfg['bound']['stochastic'],
             'order':  cfg['bound']['order']}
     return dico
 

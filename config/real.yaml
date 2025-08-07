@@ -10,8 +10,6 @@ model:
   stump_init: "rand" # ones, rand
   bootstrap: 0.5 # only for pred = rf
   tree_depth: None # only for pred = rf
-  a: 0
-  uniform: False
 
 training:
   seed: 541944
@@ -35,6 +33,5 @@ dataset: 'SVMGUIDE'
 bound:
   delta: 0.05
   type: "seeger"
-  stochastic: False
   order: 1.5
   n_grid: 5

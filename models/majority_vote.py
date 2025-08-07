@@ -4,7 +4,7 @@ from core.distributions import distr_dict
 
 class MajorityVote(torch.nn.Module):
 
-    def __init__(self, voters, prior, a, n_classes, distr="dirichlet", kl_factor=1.):
+    def __init__(self, voters, prior, n_classes, distr="dirichlet", kl_factor=1.):
 
         super(MajorityVote, self).__init__()
         
@@ -22,11 +22,8 @@ class MajorityVote(torch.nn.Module):
 
         self.prior = prior
         self.voters = voters
-        self.mc_draws = 0
-        self.a = a
         self.n_classes = n_classes
-        self.distr_type = distr
-        self.distribution = distr_dict[distr](self.post, self.a, self.n_classes, 0)
+        self.distribution = distr_dict[distr](self.post, self.n_classes)
         self.distribution_name = distr
         self.kl_factor = kl_factor
 
@@ -42,16 +39,6 @@ class MajorityVote(torch.nn.Module):
             return self.distribution.approximated_risk(batch, loss, mean)
 
         return self.distribution.risk(batch, mean, centered=centered)
-
-    def voter_strength(self, data):
-        """ expected accuracy of a voter of the ensemble"""
-        # import pdb; pdb.set_trace()
-        
-        y_target, y_pred = data
-
-        l = torch.where(y_target == y_pred, torch.tensor(1.), torch.tensor(0.))
-
-        return l.mean(1)
 
     def KL(self):
 
@@ -76,7 +63,7 @@ class MajorityVote(torch.nn.Module):
 
         assert len(value) == self.num_voters
          
-        if self.distr_type == "categorical": # make sure params sum to 1
+        if self.distribution_name == "categorical": # make sure params sum to 1
             self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.theta = self.post
 
@@ -91,13 +78,11 @@ class MajorityVote(torch.nn.Module):
 
     def random_draw_new_post(self):
         value = self.distribution.rsample()
-        if self.distribution_name == "dirichlet":
-            value *= self.prior.sum()
         self.set_post(value)
 
 class MultipleMajorityVote(torch.nn.Module):
 
-    def __init__(self, voter_sets, priors, a, n_classes, weights, posteriors=None, distr="dirichlet",  kl_factor=1.):
+    def __init__(self, voter_sets, priors, n_classes, weights, posteriors=None, distr="dirichlet",  kl_factor=1.):
 
         super(MultipleMajorityVote, self).__init__()
 
@@ -107,13 +92,12 @@ class MultipleMajorityVote(torch.nn.Module):
         if posteriors is not None:
             assert len(priors) == len(posteriors), "must specify same number of priors and posteriors"
 
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, n_classes, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
+            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, n_classes, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
 
         else:
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, a, n_classes, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
+            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, n_classes, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
 
         self.weights = weights
-        self.a = a
         self.distribution_name = distr
 
     def forward(self, xs):
@@ -132,12 +116,6 @@ class MultipleMajorityVote(torch.nn.Module):
             risks.append(w * mv.risk(batch, loss, mean, centered))
 
         return sum(risks)
-
-    def voter_strength(self, batchs):
-        """ expected accuracy of a voter of the ensemble"""
-        l = torch.stack([w * sum(mv.voter_strength(batch)) for mv, w, batch in zip(self.mvs, self.weights, batchs)])
-
-        return l
 
     def KL(self):
 

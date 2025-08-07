@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 import wandb
 
-from models.pretrainedDNN import pretrainedDNN
+from models.pretrainedDNN import pretrainedDNN, LinearMultiClassifier
 
 wandb.login()
 
@@ -102,7 +102,6 @@ def main(cfg):
                 M = 1
 
             loss, bound_coeff, distribution_type, kl_factor, div = risks[cfg.training.risk]
-            a = cfg.model.a
             delta = cfg.bound.delta
             if cfg.training.risk in ["FO", "Triple", "Tr"]:
                 delta /= 3
@@ -114,17 +113,10 @@ def main(cfg):
 
                 print(f"Optimize {cfg.bound.type} bound")
 
-                if cfg.bound.stochastic:
-
-                    print("Evaluate bound regularizations over mini-batch")
-                    bound = lambda n, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
-                    test_bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
-
-                else:
-                    print("Evaluate bound regularizations over whole training set")
-                    n = len(data.X_train)
-                    bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
-                    test_bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
+                print("Evaluate bound regularizations over whole training set")
+                n = len(data.X_train)
+                bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
+                test_bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
             prior_coefficient = 1 / M if cfg.model.prior == "adjusted" else int(cfg.model.prior)
             prior_value = -5 if cfg.training.distribution == "categorical" else prior_coefficient
@@ -133,13 +125,12 @@ def main(cfg):
                 betas = [torch.ones(M) * prior_coefficient for _ in predictors] # prior
 
                 # weights proportional to data sizes
-                model = MultipleMajorityVote(predictors, betas, a, n_classes, weights=(0.5, 0.5), distr=distribution_type, kl_factor=kl_factor)
+                model = MultipleMajorityVote(predictors, betas, n_classes, weights=(0.5, 0.5), distr=distribution_type, kl_factor=kl_factor)
 
             elif cfg.model.pred == "stumps-uniform":
                 betas = torch.ones(M) * prior_coefficient # prior
 
-                model = MajorityVote(predictors, betas, a, n_classes, distr=distribution_type, kl_factor=kl_factor)
-
+                model = MajorityVote(predictors, betas, n_classes, distr=distribution_type, kl_factor=kl_factor)
             else:
                 embedding = pretrainedDNN(cfg.model.pred)
 
@@ -167,7 +158,11 @@ def main(cfg):
                 data.X_test = data.X_test.detach()
 
                 # Here, the model corresponds in a linear layer
-                model = torch.nn.Linear(data.X_train.shape[1], n_classes, bias=False, dtype=torch.double)
+                input_size = data.X_train.shape[1]
+                output_size = n_classes
+                betas = torch.zeros(input_size, output_size)
+                model = LinearMultiClassifier(input_size, output_size, bias=False, dtype=torch.double,
+                                              prior=betas, distr=distribution_type, kl_factor=kl_factor)
 
 
             if cfg.model.pred == "rf":  # a loader per posterior
@@ -216,7 +211,7 @@ def main(cfg):
                 final_bound = {'bound': Cbound}
             else:
                 # First training phase
-                model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes, pred_type=cfg.model.pred)
                 if cfg.training.risk == "FO":
                     ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
                     deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution == "categorical" else 2
@@ -237,7 +232,7 @@ def main(cfg):
                         # We need to recompute the train and test error
                         if n_classes > 2:
                             val_routine = evaluate_multiset
-                            test_routine = lambda d, *args, **kwargs: evaluate_multiset((d, d), *args, **kwargs)
+                            test_routine = evaluate_multiset
                         else:
                             val_routine = evaluate
                             test_routine = evaluate
@@ -250,12 +245,9 @@ def main(cfg):
                     optimizer = Adam(model.parameters(), lr=cfg.training.lr / 10)
                     # init learning rate scheduler
                     lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
-                    loss, bound_coeff, distribution_type, kl_factor, div = (lambda x, y, z: triple_loss(x, y, z, distribution_name, n_classes), 1., distribution_name, 1., 'KL')
-                    if cfg.bound.stochastic:
-                        bound = lambda n, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
-                    else:
-                        bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
-                    model, final_bound, _, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes)
+                    loss, bound_coeff, distribution_type, kl_factor, div = (lambda x, y, z: triple_loss(x, y, z, cfg.model.pred, distribution_name, n_classes), 1., distribution_name, 1., 'KL')
+                    bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
+                    model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes, pred_type=cfg.model.pred)
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
                 else:

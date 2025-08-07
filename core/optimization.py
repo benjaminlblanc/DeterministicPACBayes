@@ -21,7 +21,6 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
 
         # import pdb; pdb.set_trace()
         optimizer.zero_grad()
-        n_alphas = len(model.post)
 
         if bound is not None:
             cost = bound(n, model, model.risk(data, loss), sample=False)
@@ -74,13 +73,11 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
 
     risk = 0.
     risk_multi = torch.tensor([0., 0., 0.])
-    strength = 0.
     n, n_1, n_2, n_3 = 0, 0, 0, 0
 
     for batch in dataloader:
         data = batch[1], model(batch[0])
         model_risk = model.risk(data, loss=loss, mean=False, centered=centered)
-        strength += sum(model.voter_strength(data))
         if type(model_risk) != tuple:
             risk += model_risk
             n += len(data[0])
@@ -94,15 +91,13 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
 
     if type(model_risk) != tuple:
         risk /= n
-        strength /= n
-        total_metrics = {"error": risk.item(), "strength": strength.item()}
+        total_metrics = {"error": risk.item()}
     else:
         risk_multi[0] /= n_1
         risk_multi[1] /= n_2
         risk_multi[2] /= n_3
-        strength /= n_1
         risk = risk_multi
-        total_metrics = {"error": risk[0].item(), "strength": strength.item()}
+        total_metrics = {"error": risk[0].item()}
 
     if bounds is not None:
         for k in bounds.keys():
@@ -147,7 +142,7 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
 
 def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, risk_type, n, loss=None, monitor=None,
-                       num_epochs=100, lr_scheduler=None, test_bound=None, distribution_name='', n_classes=0):
+                       num_epochs=100, lr_scheduler=None, test_bound=None, distribution_name='', n_classes=0, pred_type='rf'):
 
     best_bound = float("inf")
     best_model = deepcopy(model)
@@ -192,7 +187,7 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     final_bound = {'bound': best_bound}
 
     if risk_type == "FO":
-        triple_bnd = compute_bound(model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, distribution_name, n_classes), False)
+        triple_bnd = compute_bound(model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, pred_type, distribution_name, n_classes), False)
     else:
         triple_bnd = (None, None, None)
 

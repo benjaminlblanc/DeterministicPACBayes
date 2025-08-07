@@ -6,24 +6,24 @@ from torch.utils.data import DataLoader
 from core.utils import BetaInc, Phi
 from tqdm import tqdm
 
-def I(l, u, a):
+def I(l, u):
     """
     Computes the incomplete beta function.
     """
-    c = torch.tensor((1 + a) / 2)
+    c = torch.tensor(0.5)
     return BetaInc.apply(l, u, c, torch.tensor(1))
 
-def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, a, b_surrogate, c_surrogate):
+def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, b_surrogate, c_surrogate):
     """
     Computes Ben's bound, given Gibbs risk, u and l.
     """
     if distribution == "gaussian":
         biggest_norm = get_bound_on_pred_norm(leaf_values, max)
         smallest_norm = get_bound_on_pred_norm(leaf_values, min)
-        phi_l, phi_u = Phi((l + a) / biggest_norm), Phi((u - a) / smallest_norm)
+        phi_l, phi_u = Phi((l) / biggest_norm), Phi((u) / smallest_norm)
         b, c = phi_u, 1 - phi_l
     elif distribution == "dirichlet":
-        I_l, I_u = I(u, l_1_norm - u, a), I(l_1_norm - l, l, a)
+        I_l, I_u = I(u, l_1_norm - u), I(l_1_norm - l, l)
         b, c = I_l, I_u
     elif distribution == "categorical":
         b, c = 1 - u, l
@@ -155,7 +155,7 @@ def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution
     l, u, l_1_norm = get_normalized_l_u(leaves, model.get_post(), 'sign', distribution_name, multiclass)
     if cur_PB_bound is None:
         cur_PB_bound = compute_bound(model, bound, n, trainloader, loss, False)
-    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, leaves, distribution_name, model.a, b_surrogate, c_surrogate)
+    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, leaves, distribution_name, b_surrogate, c_surrogate)
 
 def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name):
     """
