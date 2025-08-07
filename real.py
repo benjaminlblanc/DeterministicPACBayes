@@ -57,7 +57,7 @@ def main(cfg):
         "Cbound": (None, None, distribution_name, None, None),
     }
 
-    train_errors, test_errors, train_losses, bounds, strengths, entropies, kls, times = [], [], [], [], [], [], [], []
+    train_errors, test_errors, train_losses, bounds, entropies, kls, times = [], [], [], [], [], [], []
     for i in range(cfg.num_trials):
 
         current_seed = cfg.training.seed + i
@@ -141,8 +141,14 @@ def main(cfg):
                 m_train = len(data.X_train) // 2
                 data.X_train = model.voters_forward([data.X_train[m_train:], data.X_train[:m_train]])
 
+                m_test = len(data.X_test) // 2
+                data.X_test = model.voters_forward([data.X_test[m_test:], data.X_test[:m_test]])
+
                 train1 = TorchDataset(data.X_train[0], data.y_train[m_train:])
                 train2 = TorchDataset(data.X_train[1], data.y_train[:m_train])
+
+                test1 = TorchDataset(data.X_test[0], data.y_test[m_test:])
+                test2 = TorchDataset(data.X_test[1], data.y_test[:m_test])
 
                 trainloader = [
                     DataLoader(train1, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers,
@@ -151,8 +157,8 @@ def main(cfg):
                                shuffle=True)
                 ]
 
-                testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096,
-                                        num_workers=cfg.num_workers, shuffle=False)
+                testloader = [DataLoader(test1, batch_size=4096, num_workers=cfg.num_workers, shuffle=False),
+                              DataLoader(test2, batch_size=4096, num_workers=cfg.num_workers, shuffle=False)]
             else:
                 data.X_train = model.voters_forward(torch.tensor(data.X_train))
                 data.X_test = model.voters_forward(torch.tensor(data.X_test))

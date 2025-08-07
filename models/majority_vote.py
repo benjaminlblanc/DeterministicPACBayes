@@ -26,10 +26,7 @@ class MajorityVote(torch.nn.Module):
         self.a = a
         self.n_classes = n_classes
         self.distr_type = distr
-        if distr == "gaussian":
-            self.distribution = distr_dict[distr](self.post, self.a, self.n_classes, 0)
-        else:
-            self.distribution = distr_dict[distr](self.post, self.a, 0)
+        self.distribution = distr_dict[distr](self.post, self.a, self.n_classes, 0)
         self.distribution_name = distr
         self.kl_factor = kl_factor
 
@@ -39,12 +36,12 @@ class MajorityVote(torch.nn.Module):
     def voters_forward(self, x):
         return self.voters(x)
 
-    def risk(self, batch, loss=None, mean=True):
+    def risk(self, batch, loss=None, mean=True, centered=True):
 
         if loss is not None:
             return self.distribution.approximated_risk(batch, loss, mean)
 
-        return self.distribution.risk(batch, mean)
+        return self.distribution.risk(batch, mean, centered=centered)
 
     def voter_strength(self, data):
         """ expected accuracy of a voter of the ensemble"""
@@ -127,12 +124,12 @@ class MultipleMajorityVote(torch.nn.Module):
 
         return [mv.voters_forward(x) for mv, x in zip(self.mvs, xs)]
 
-    def risk(self, batchs, loss=None, mean=True):
+    def risk(self, batchs, loss=None, mean=True, centered=True):
 
         risks = []
         for mv, w, batch in zip(self.mvs, self.weights, batchs):
             # import pdb; pdb.set_trace()
-            risks.append(w * mv.risk(batch, loss, mean))
+            risks.append(w * mv.risk(batch, loss, mean, centered))
 
         return sum(risks)
 
