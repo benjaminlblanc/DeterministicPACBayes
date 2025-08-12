@@ -336,8 +336,8 @@ def create_CIFAR10_Inception_v3(path):
 
         # number of samples to extract from
 
-        nsamples_training = 100    # at most 50000
-        nsamples_testing  = 100    # at most 10000
+        nsamples_training = 50000    # at most 50000
+        nsamples_testing  = 10000    # at most 10000
 
         # nsamples_training = len(data_training)
         # nsamples_testing  = len(data_testing)

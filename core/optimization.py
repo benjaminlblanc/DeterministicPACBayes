@@ -190,7 +190,6 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
 
         if no_improv == num_epochs // 4:
             break
-    print()
     t2 = time()
 
     train_error = val_routine(trainloader, best_model)

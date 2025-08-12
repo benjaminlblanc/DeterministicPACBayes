@@ -20,7 +20,7 @@ def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, b
     if distribution == "gaussian":
         biggest_norm = get_bound_on_pred_norm(leaf_values, max)
         smallest_norm = get_bound_on_pred_norm(leaf_values, min)
-        phi_l, phi_u = Phi((l) / biggest_norm), Phi((u) / smallest_norm)
+        phi_l, phi_u = Phi(l / biggest_norm), Phi(u / smallest_norm)
         b, c = phi_u, 1 - phi_l
     elif distribution == "dirichlet":
         I_l, I_u = I(u, l_1_norm - u), I(l_1_norm - l, l)
@@ -87,10 +87,10 @@ def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribu
         except ValueError:
             sums = [[1], [1]]
             possible_values = np.array([1, 1])
+    if distribution == "gaussian" and multiclass:
+        return torch.tensor(0), torch.tensor(10), None
     indices = get_indices(possible_values.copy(), sums)
     if distribution == "gaussian":
-        if multiclass:
-            return 0, 10, None
         sum_1 = torch.sum(normalized_tree_weights[indices[0]])
         sum_2 = torch.sum(normalized_tree_weights[indices[1]])
         return torch.abs(sum_1 - sum_2), torch.sum(torch.abs(normalized_tree_weights)), None
@@ -115,7 +115,7 @@ def get_bound_on_pred_norm(leaf_values, func):
     tot = 0
     for i in range(len(leaf_values)):
         tot += func(leaf_values[i])
-    return tot ** 0.5
+    return torch.tensor(tot ** 0.5)
 
 
 def compute_bound(model, bound, n, trainloader, loss, sample):

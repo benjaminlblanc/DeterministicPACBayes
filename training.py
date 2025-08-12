@@ -49,6 +49,7 @@ def main(cfg):
 
     # define params for each method
     n_classes = get_n_classes(cfg.dataset)
+    multiclass = n_classes > 2
     risks = { # type: (loss, bound_coeff, distribution_type, kl_factor, div)
         "Tr": (lambda x, y, z: true_loss(x, y, z, distribution_name), 1., distribution_name, 1., 'KL'),
         "Triple": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),
@@ -197,14 +198,14 @@ def main(cfg):
                 # First training phase
                 model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes, pred_type=cfg.model.pred)
                 if cfg.training.risk == "FO":
-                    ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
+                    ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate, multiclass)
                     deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution == "categorical" else 2
 
                     # Results are compiled in the 'seed_results' dictionary
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, deterministic_bound, final_bound, ben_bound_no_finetune.item(), triple_bound_no_finetune.item(), ben_triple_bound_no_finetune.item())
 
                     # Cropping the weight of base predictors that barely have an effect on the prediction
-                    if cfg.training.distribution == "gaussian" and n_classes > 2:
+                    if cfg.training.distribution == "gaussian" and multiclass:
                         ben_bound_with_finetune = ben_bound_no_finetune
                         triple_bound_with_finetune = triple_bound_no_finetune
                         ben_triple_bound_with_finetune = ben_triple_bound_no_finetune
@@ -214,7 +215,7 @@ def main(cfg):
                         ben_bound_with_finetune, triple_bound_with_finetune, ben_triple_bound_with_finetune = compute_det_bound(model, bound, n, M, data, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate)
 
                         # We need to recompute the train and test error
-                        if n_classes > 2:
+                        if multiclass:
                             val_routine = evaluate_multiset
                             test_routine = evaluate_multiset
                         else:
