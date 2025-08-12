@@ -1,16 +1,15 @@
-import pickle
-
 import numpy as np
 import gzip
-import tarfile
 import pandas as pd
-import torch
-from torchvision import transforms
 
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from category_encoders.ordinal import OrdinalEncoder
+
 from data.utils import get_validation_set, download, read_idx_file
+import torch
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress INFO, WARNING, and ERROR messages
 # BINARY CLASSIFICATION
 
 def fetch_SVMGUIDE1(path, valid_size=0.2, test_size=0.2, seed=None):
@@ -206,100 +205,202 @@ def fetch_MNIST(path, valid_size=0.2, test_size=0.2, seed=None):
     )
 
 
-def fetch_CIFAR10(path, valid_size=0.2, test_size=0.2, seed=None):
+def load_CIFAR_dataset(path, shuffle=True):
+    """
+    Download (if necessary) CIFAR database file and extract it.
+    Return the tuple of training and testing dataset.
+    """
+    import os
+    import logging
+    import tarfile
+    import urllib.request
+    import pickle
+    import numpy as np
     path = Path(path)
-    train_path = path / 'cifar-10-python.tar.gz'
-    test_path = path / 'cifar-10-python.tar.gz'
+    CIFAR_DATA_URL = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
+    CIFAR_DIR_PATH = path / 'data/CIFAR10/'
+    CIFAR_FOLDERNAME = path / 'data/CIFAR10/cifar-10-batches-py'
+    CIFAR_BATCH_SIZE = 10000  # CIFAR10 data are split into blocks of 10000 images
 
-    if not train_path.exists() or not test_path.exists():
-        path.mkdir(parents=True, exist_ok=True)
+    CIFAR_TRAINING_FILENAMES = [
+        os.path.join(CIFAR_DIR_PATH, CIFAR_FOLDERNAME, 'data_batch_%d' % i) for i in range(1, 6)
+    ]
+    CIFAR_TESTING_FILENAMES = [os.path.join(CIFAR_DIR_PATH, CIFAR_FOLDERNAME, 'test_batch')]
 
-        download('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', train_path)
-        download('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', test_path)
+    def read_CIFAR_files(filenames):
+        """
+        Return the CIFAR dataset loaded from the bunch of files.
 
-    # Extract and load data
-    with tarfile.open(train_path, 'r:gz') as tar:
-        tar.extractall(path)
+        Keyword arguments:
+        filenames -- the list of filenames (strings)
+        """
+        dataset = []  # dataset to be returned
+        for file in filenames:
+            with open(file, 'rb') as fo:
+                _dict = pickle.load(fo, encoding='bytes')
+            data = _dict[b'data']
+            labels = _dict[b'labels']
+            assert data[0].size == 3 * 32 * 32
 
-    def unpickle(file):
-        with open(file, 'rb') as fo:
-            dict = pickle.load(fo, encoding='bytes')
-        return dict
+            for k in range(CIFAR_BATCH_SIZE):
+                image = data[k].reshape(3, 32, 32)
+                image = np.transpose(image, [1, 2, 0])
+                dataset.append([image, labels[k]])
+        return dataset
+    logging.info("Loading dataset ...")
+    # checking if the data is already in the folder
+    if not os.path.isdir(os.path.join(CIFAR_DIR_PATH, CIFAR_FOLDERNAME)):
+        # if not, we download the data
+        os.makedirs(CIFAR_DIR_PATH, exist_ok=True) # create folder for the data
+        filename = CIFAR_DATA_URL.split('/')[-1]
+        filepath = os.path.join(CIFAR_DIR_PATH, filename)
+        # try to download the file
+        try:
+            import sys
+            def _progress(cnt,blck_size,total_size):
+                sys.stdout.write('\r>> Downloading file %s (%3.1f%%)' % (filename, 100.0*cnt*blck_size/total_size))
+                sys.stdout.flush()
+            logging.info("Downloading file {f}".format(f=CIFAR_DATA_URL))
+            fpath, _ = urllib.request.urlretrieve(CIFAR_DATA_URL, filepath, reporthook=_progress)
+            statinfo = os.stat(fpath)
+            size = statinfo.st_size
+        except:
+            logging.error("Failed to download {f}".format(f=CIFAR_DATA_URL))
+            raise
 
-    # Load training data
-    train_dict = unpickle(path / 'cifar-10-python' / 'train')
-    X_train_full = train_dict[b'data'].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
-    y_train_full = np.array(train_dict[b'fine_labels'])
+        print('Succesfully downloaded {f} ({s} bytes)'.format(f=filename,s=size))
+        tarfile.open(filepath, 'r:gz').extractall(CIFAR_DIR_PATH)
 
-    # Load test data
-    test_dict = unpickle(path / 'cifar-10-python' / 'test')
-    X_test = test_dict[b'data'].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
-    y_test = np.array(test_dict[b'fine_labels'])
+    trainingData = read_CIFAR_files(CIFAR_TRAINING_FILENAMES)
+    testingData = read_CIFAR_files(CIFAR_TESTING_FILENAMES)
 
-    # Normalize
-    X_train_full = X_train_full.astype('float32') / 255.0
-    X_test = X_test.astype('float32') / 255.0
+    if shuffle:
+        logging.info("Shuffling data ...")
+        import sklearn
+        trainingData = sklearn.utils.shuffle(trainingData)
+        testingData = sklearn.utils.shuffle(testingData)
+
+    return trainingData, testingData
+
+def create_CIFAR10_Inception_v3(path):
+    import tensorflow as tf
+    import time
+    import numpy as np
+    import sys
+    import os
+
+    import urllib.request
+    import tarfile
+
+    # Create model directory if it doesn't exist
+    os.makedirs(path / 'models/', exist_ok=True)
+
+    # Download URL and file paths
+    url = 'http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz'
+    download_path = path / 'inception-2015-12-05.tgz'
+    model_extract_path = path / 'models/classify_image_graph_def.pb'
+    data_extract_path = path / 'data/CIFAR10_Inception_v3/CIFAR10_Inception_v3.npz'
+
+    # Extract the specific file from the tar.gz archive
+    # Check if model already exists
+
+    if not os.path.exists(model_extract_path):
+        # Download the model
+        print("Downloading Inception model...")
+        urllib.request.urlretrieve(url, download_path)
+        print(f"Downloaded to {download_path}")
+        print("Extracting model...")
+        with tarfile.open(download_path, 'r:gz') as tar:
+            # Find the classify_image_graph_def.pb file in the archive
+            for member in tar.getmembers():
+                if member.name.endswith('classify_image_graph_def.pb'):
+                    # Extract and rename to the desired path
+                    member.name = 'classify_image_graph_def.pb'  # Remove any directory structure
+                    tar.extract(member, path / 'models/')
+                    break
+            else:
+                print("Warning: classify_image_graph_def.pb not found in archive")
+
+        # Clean up the downloaded tar.gz file
+        os.remove(download_path)
+        print(f"Model ready at: {model_extract_path}")
+
+    if not os.path.exists(data_extract_path):
+        # Loading the dataset to transform
+        data_training, data_testing = load_CIFAR_dataset(path, shuffle=False)
+
+        graph_def = tf.compat.v1.GraphDef()
+        with open(path / 'models/classify_image_graph_def.pb', "rb") as f:
+            graph_def.ParseFromString(f.read())
+        tf.import_graph_def(graph_def, name='Incv3')
+
+        # number of samples to extract from
+
+        nsamples_training = 100    # at most 50000
+        nsamples_testing  = 100    # at most 10000
+
+        # nsamples_training = len(data_training)
+        # nsamples_testing  = len(data_testing)
+
+        nsamples = nsamples_training + nsamples_testing
+
+        X_data = [ data_training[i][0] for i in range(nsamples_training) ] + \
+                 [ data_testing[i][0]  for i in range(nsamples_testing)  ]
+
+        y_training = np.array( [ data_training[i][1] for i in range(nsamples_training) ] )
+        y_testing  = np.array( [ data_testing[i][1]  for i in range(nsamples_testing)  ] )
+
+        # Running tensorflow session in order to extract features
+        def _progress(count, start, time):
+            percent = 100.0*(count+1)/nsamples
+            sys.stdout.write('\r>> Extracting features %4d/%d  %6.2f%%   \
+                              ETA %8.1f seconds' % (count+1, nsamples, percent, (time-start)*(100.0-percent)/percent) )
+            sys.stdout.flush()
+
+        with tf.compat.v1.Session() as sess:
+            softmax_tensor = sess.graph.get_tensor_by_name('softmax:0')
+            representation_tensor = sess.graph.get_tensor_by_name('pool_3:0')
+            predictions = np.zeros((nsamples, 1008), dtype='float32')
+            representations = np.zeros((nsamples, 2048), dtype='float32')
+
+            print('nsamples = ', nsamples)
+            start = time.time()
+            for i in range(nsamples):
+                [reps, preds] = sess.run([representation_tensor, softmax_tensor], {'DecodeJpeg:0': X_data[i]})
+                predictions[i] = np.squeeze(preds)
+                representations[i] = np.squeeze(reps)
+                if i+1==nsamples or not (i%10): _progress(i, start, time.time())
+            print('\nElapsed time %.1f seconds' % (time.time()-start))
+
+        # Create data directory if it doesn't exist
+        os.makedirs(path / 'data/CIFAR10_Inception_v3/', exist_ok=True)
+
+        # Finally we can save our work to the file
+        np.savez_compressed(data_extract_path,
+                            features_training=representations[:nsamples_training],
+                            features_testing=representations[-nsamples_testing:],
+                            labels_training=y_training,
+                            labels_testing=y_testing )
+
+def fetch_CIFAR10_Inception_v3(path, valid_size=0.2, test_size=0.2, seed=None):
+    path = Path(path).parent.parent
+    # If necessary, create the dataset
+    create_CIFAR10_Inception_v3(path)
+
+    # Load the compressed dataset
+    data = np.load(path / 'data/CIFAR10_Inception_v3/CIFAR10_Inception_v3.npz')
+
+    # Extract individual arrays using the keys from savez_compressed
+    X_train_full = data['features_training']
+    X_test = data['features_testing']
+    y_train_full = data['labels_training']
+    y_test = data['labels_testing']
+
+    data.close()
 
     Y = np.hstack((y_train_full, y_test))
     X_train, X_test, y_train, y_test = train_test_split(np.vstack(
         (X_train_full, X_test)), Y, stratify=Y, test_size=test_size, random_state=seed)
-
-    X_val, y_val = get_validation_set(X_train, y_train, valid_size, seed)
-
-    return dict(
-        X_train=X_train, y_train=y_train, X_valid=X_val, y_valid=y_val, X_test=X_test, y_test=y_test
-    )
-
-def fetch_CIFAR100(path, valid_size=0.2, test_size=0.2, seed=None):
-
-    path = Path(path)
-    train_path = path / 'cifar-100-python.tar.gz'
-    test_path = path / 'cifar-100-python.tar.gz'
-
-    if not train_path.exists() or not test_path.exists():
-        path.mkdir(parents=True, exist_ok=True)
-
-        download('https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz', train_path)
-        download('https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz', test_path)
-
-    # Extract and load data
-    with tarfile.open(train_path, 'r:gz') as tar:
-        tar.extractall(path)
-
-    def unpickle(file):
-        with open(file, 'rb') as fo:
-            dict = pickle.load(fo, encoding='bytes')
-        return dict
-
-    # Load training data
-    train_dict = unpickle(path / 'cifar-100-python' / 'train')
-    X_train_full = train_dict[b'data'].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
-    y_train_full = np.array(train_dict[b'fine_labels'])
-
-    # Load test data
-    test_dict = unpickle(path / 'cifar-100-python' / 'test')
-    X_test = test_dict[b'data'].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
-    y_test = np.array(test_dict[b'fine_labels'])
-
-    # Normalize
-    preprocess = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
-
-    #X_train_full = transforms.functional.to_pil_image(X_train_full, mode=None)
-    X_train_full = preprocess(torch.tensor(X_train_full[:100]))
-    X_test = preprocess(torch.tensor(X_test[:100]))
-
-    #X_train_full = X_train_full.astype('float32') / 255.0
-    #X_test = X_test.astype('float32') / 255.0
-
-    Y = np.hstack((y_train_full, y_test))
-    X_train, X_test, y_train, y_test = train_test_split(np.vstack(
-        (X_train_full, X_test)), Y, stratify = Y, test_size = test_size, random_state = seed)
 
     X_val, y_val = get_validation_set(X_train, y_train, valid_size, seed)
 

@@ -3,17 +3,6 @@ import torch
 from core.distributions import Gaussian
 
 
-def pretrainedDNN(pred):
-    if pred[:6] == 'resnet':
-        model = torch.hub.load('pytorch/vision:v0.10.0', pred, weights=f"ResNet{pred[6:]}_Weights.DEFAULT")
-
-        # We only keep the embedding
-        model.fc = nn.Identity()
-        model.eval()
-    else:
-        raise NotImplementedError("model.pred should be one the following: stumps-uniform, rf, resnet18, resnet34, resnet50, resnet101, resnet152.")
-    return model
-
 class LinearMultiClassifier(torch.nn.Linear):
     def __init__(self, input_size, output_size, bias, dtype, prior, distr="gaussian", kl_factor=1.):
         super().__init__(input_size, output_size, bias=bias, dtype=dtype)

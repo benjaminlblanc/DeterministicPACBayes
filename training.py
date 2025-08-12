@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 import wandb
 
-from models.pretrainedDNN import pretrainedDNN, LinearMultiClassifier
+from models.pretrainedDNN import LinearMultiClassifier
 
 wandb.login()
 
@@ -111,9 +111,6 @@ def main(cfg):
             bound = None
             if cfg.training.opt_bound:
 
-                print(f"Optimize {cfg.bound.type} bound")
-
-                print("Evaluate bound regularizations over whole training set")
                 n = len(data.X_train)
                 bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
                 test_bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
@@ -132,22 +129,9 @@ def main(cfg):
 
                 model = MajorityVote(predictors, betas, n_classes, distr=distribution_type, kl_factor=kl_factor)
             else:
-                embedding = pretrainedDNN(cfg.model.pred)
-
                 # If needed, we reshape the images
                 data.X_train = torch.tensor(data.X_train, dtype=torch.double)
                 data.X_test = torch.tensor(data.X_test, dtype=torch.double)
-
-                data.X_train = torch.reshape(data.X_train, (data.X_train.shape[0], 1, 28, 28))
-                data.X_test = torch.reshape(data.X_test, (data.X_test.shape[0], 1, 28, 28))
-
-                data.X_train = data.X_train.repeat(1, 3, 1, 1)
-                data.X_test = data.X_test.repeat(1, 3, 1, 1)
-
-                # Creating the data we will actually be working with
-                embedding = embedding.double()
-                data.X_train = embedding(data.X_train)
-                data.X_test = embedding(data.X_test)
 
                 # Adding the bias
                 data.X_train = torch.hstack((data.X_train, torch.ones((data.X_train.shape[0], 1))))

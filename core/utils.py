@@ -25,6 +25,8 @@ def whether_to_run_run(cfg):
             assert 1 < cfg.bound.order < 2
     if cfg.training.risk == "Bin":
         assert cfg.training.rand_n > 0
+    if cfg.model.pred not in ['stumps-uniform', 'rf', 'LinearClassifier']:
+        assert "Not a valid choice of model."
 
 def updating_first_seed_results(seed_results, time, train_err, test_err, deterministic_bound, final_bound, ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune):
     seed_results["train-error"] = train_err['error']
@@ -89,7 +91,7 @@ def get_n_classes(dataset):
         return 3
     elif dataset == "SHUTTLE":
         return 7
-    elif dataset in ["CIFAR10", "MNIST", "FASHION", "PENDIGITS"]:
+    elif dataset in ["CIFAR10_Inception_v3", "MNIST", "FASHION", "PENDIGITS"]:
         return 10
     elif dataset == "SENSORLESS":
         return 11

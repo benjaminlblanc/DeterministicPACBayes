@@ -1,5 +1,3 @@
-import torch
-
 from data.real_datasets import *
 from data.toy_datasets import *
 
@@ -20,8 +18,7 @@ MC_DATASETS = {
     'SENSORLESS': fetch_SENSORLESS,
     'SHUTTLE': fetch_SHUTTLE,
     'FASHION': fetch_FASHION_MNIST,
-    'CIFAR10': fetch_CIFAR10,
-    'CIFAR100': fetch_CIFAR100,
+    'CIFAR10_Inception_v3': fetch_CIFAR10_Inception_v3,
 }
 
 class Dataset:
@@ -67,7 +64,6 @@ class Dataset:
 
         if normalize:
 
-            print("Normalize dataset")
             axis = [0] + [i + 2 for i in range(self.X_train.ndim - 2)]
             self.mean = np.mean(self.X_train, axis=tuple(axis), dtype=np.float32)
             self.std = np.std(self.X_train, axis=tuple(axis), dtype=np.float32)

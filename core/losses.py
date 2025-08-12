@@ -58,5 +58,5 @@ def moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, ord
 
         elif distribution == 'categorical':
             return torch.where(y_target != y_pred, theta, torch.tensor(0.)).sum(1) ** order
-    elif predictor in ["resnet18"] and distribution == 'gaussian':
+    elif distribution == 'gaussian':
         return gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, torch.tensor(order), predictor)
