@@ -175,9 +175,12 @@ class Gaussian():
 
     def risk(self, batch, mean=True, centered=None):
         y_target, y_pred = batch
-        y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
-        weighted_preds = y_pred_oh.transpose(1, 2) * self.w
-        summed_preds = torch.sum(weighted_preds, dim=2)
+        if len(self.w.shape) == 2:
+            summed_preds = torch.matmul(y_pred, self.w)
+        else:
+            y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
+            weighted_preds = y_pred_oh.transpose(1, 2) * self.w
+            summed_preds = torch.sum(weighted_preds, dim=2)
         agg_preds = torch.argmax(summed_preds, dim=1).reshape(-1, 1)
 
         r = torch.where(y_target != agg_preds, torch.ones(1), torch.zeros(1))
@@ -206,12 +209,12 @@ class Gaussian():
         return sum(r)
 
     def rsample(self):
-
-        return Gaus(self.w, torch.eye(len(self.w))).rsample()
+        w = torch.reshape(self.w, (-1, 1))
+        return Gaus(w.squeeze(), torch.eye(len(w), dtype=torch.double)).rsample()
 
 
 distr_dict = {
+    "categorical": Categorical,
     "dirichlet": Dirichlet,
-    "gaussian": Gaussian,
-    "categorical": Categorical
+    "gaussian": Gaussian
 }

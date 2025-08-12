@@ -50,7 +50,9 @@ def seeger_bound(n, model, risk, delta, div, sample=False, coeff=1, order=None, 
         else:
             const = np.log(2 * (n**0.5) / delta)
 
-    if sample:
+    if coeff == 0:
+        bound = risk
+    elif sample:
         bound = coeff * klInvFunction.apply(risk, torch.max(kl + const, torch.tensor(0)) / n)
     else:
         bound = coeff * klInvFunction.apply(risk, (kl + const) / n)

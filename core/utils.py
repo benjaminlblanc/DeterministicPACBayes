@@ -158,24 +158,23 @@ def value_to_one_hot(values, n_classes):
             array[i, j, int(values[i, j])] = 1
     return torch.tensor(array, dtype=torch.float)
 
-def create_mu(theta, y_pred, i):
+def create_mv_mu(theta, oh_y_pred_minus_oh_y_i):
     w = theta.reshape(1, len(theta))
-    y_pred_minus_y_i = y_pred - y_pred[:, :, [i]]
-    mu_full = torch.matmul(w, torch.transpose(y_pred_minus_y_i, 0, 2)).squeeze().T
-    correct_indexes = torch.arange(len(mu_full[0]))!=i
-    return mu_full[:, correct_indexes], y_pred_minus_y_i[:, :, correct_indexes]
+    mu_full = torch.matmul(w, torch.transpose(oh_y_pred_minus_oh_y_i, 0, 2)).squeeze().T
+    return mu_full
 
-def create_Sigma(y_pred, i):
-    y_pred_minus_y_i = y_pred - y_pred[:, :, [i]]
-    Sigma_full = torch.matmul(torch.transpose(y_pred_minus_y_i, 1, 2), y_pred_minus_y_i)
-    correct_indexes = torch.arange(len(Sigma_full[0])) != i
-    return Sigma_full[:, correct_indexes][:, :, correct_indexes]
+def create_mv_Sigma(oh_y_pred_minus_oh_y_i):
+    Sigma_full = torch.matmul(torch.transpose(oh_y_pred_minus_oh_y_i, 1, 2), oh_y_pred_minus_oh_y_i)
+    return Sigma_full
 
-def custom_truncated_mean_multi_normal(x, mu, S):
-    predictions = torch.distributions.multivariate_normal.MultivariateNormal(mu, S).sample(torch.Size([10000]))
-    is_inf = torch.prod(predictions <= x, dim=1)
-    predictions_lower = predictions[is_inf]
-    return torch.mean(predictions_lower, dtype=torch.float, dim=0)
+def create_nn_mu(theta, y_pred, i):
+    theta_minus_theta_i = theta - theta[:, [i]]
+    mu_full = torch.matmul(y_pred, theta_minus_theta_i)
+    correct_indexes = torch.arange(len(mu_full[0])) != i
+    return mu_full[:, correct_indexes]
+
+def create_nn_Sigma(y_pred):
+    return torch.sum(y_pred ** 2, dim=1)
 
 def create_notable_idx(unique_idx):
     len_unique_idx = len(unique_idx)
@@ -190,7 +189,7 @@ def create_notable_idx(unique_idx):
             elif j == len_unique_idx:
                 return notable_idx
 
-def purge_redundant_variables(y_pred_minus_y_i, mu, Sigma):
+def purge_redundant_mv_variables(y_pred_minus_y_i, mu, Sigma):
     y_preds_minus_y_i, mus, Sigmas = [], [], []
     for j in range(Sigma.shape[0]):
         diagonal_Sigma = torch.diag(Sigma[j])
@@ -210,29 +209,62 @@ def purge_redundant_variables(y_pred_minus_y_i, mu, Sigma):
 def is_psd(mat):
     return bool((mat == mat.T).all() and (torch.linalg.eigvals(mat).real>=0).all())
 
-def mv_gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order):
+def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred_type):
     cdfs = []
+    mus = []
+    Sigmas = []
     for i in range(n_classes):
         y_target_is_i = (y_target == i).squeeze()
         if torch.sum(y_target_is_i) > 0:
-            one_hot_y_pred = value_to_one_hot(y_pred[y_target_is_i], n_classes)
-            mu, y_pred_minus_y_i = create_mu(theta, one_hot_y_pred, i)
-            Sigma = create_Sigma(one_hot_y_pred, i)
-            purged_y_pred_minus_y_i, purged_mu, purged_Sigma = purge_redundant_variables(y_pred_minus_y_i, mu, Sigma)
-            for j in range(len(mu)):
-                cdfs.append(1 - MultinormalCDF.apply(purged_y_pred_minus_y_i[j], purged_mu[j], purged_Sigma[j]) ** order.item())
+            if pred_type == "rf":
+                one_hot_y_pred = value_to_one_hot(y_pred[y_target_is_i], n_classes)
+                oh_y_pred_minus_oh_y_i = one_hot_y_pred - one_hot_y_pred[:, :, [i]]
+                mu = create_mv_mu(theta, oh_y_pred_minus_oh_y_i)
+                Sigma = create_mv_Sigma(oh_y_pred_minus_oh_y_i)
+                purged_y_pred_minus_y_i, purged_mu, purged_Sigma = purge_redundant_mv_variables(oh_y_pred_minus_oh_y_i, mu, Sigma)
+                for j in range(len(mu)):
+                    cdfs.append(1 - MultinormalCDF.apply(purged_mu[j], purged_Sigma[j]) ** order.item())
+            else:
+                mus.append(create_nn_mu(theta, y_pred[y_target_is_i], i))
+                Sigmas.append(create_nn_Sigma(y_pred[y_target_is_i]))
+    mu = torch.vstack(mus)
+    Sigma = torch.hstack(Sigmas)
+    cdfs += 1 - NormalCDF.apply(mu, Sigma) ** order.item()
     return cdfs
 
 class MultinormalCDF(torch.autograd.Function):
     """Cumulative distribution function of the multivariate normal distribution; its forward and backward passes"""
 
     @staticmethod
-    def forward(ctx, one_hot_y_pred, purged_mu, purged_Sigma):
-        ctx.save_for_backward(one_hot_y_pred, purged_mu, purged_Sigma)
+    def forward(ctx, purged_mu, purged_Sigma):
+        ctx.save_for_backward(purged_mu, purged_Sigma)
         return torch.tensor(multivariate_normal.cdf(torch.zeros(len(purged_mu)), purged_mu, purged_Sigma, abseps=1e-2, releps=1e-2), dtype=torch.float32)
 
     @staticmethod
     def backward(ctx, grad):
-        purged_y_pred_minus_y_i, purged_mu, purged_Sigma = ctx.saved_tensors
-        expected_neg = -torch.sqrt(2 / math.pi * torch.diagonal(purged_Sigma))
-        return torch.tensor(0), grad * torch.matmul(torch.inverse(purged_Sigma), expected_neg), torch.tensor(0)
+        purged_mu, purged_Sigma = ctx.saved_tensors
+        truncated_expectation = -torch.sqrt(torch.diagonal(purged_Sigma) / (2 * math.pi)) * torch.exp(-1/2 * purged_mu ** 2 / purged_Sigma)
+        return grad * torch.matmul(torch.inverse(purged_Sigma), truncated_expectation), torch.tensor(0)
+
+class NormalCDF(torch.autograd.Function):
+    """Cumulative distribution function of the normal distribution; its forward and backward passes"""
+
+    @staticmethod
+    def forward(ctx, mu, Sigma):
+        ctx.save_for_backward(mu, Sigma)
+        return torch.prod(1/2 * (1 - erf_approximation(mu / (torch.sqrt(2 * (2 * Sigma.unsqueeze(1).repeat(1, mu.shape[1])))))), dim=1).to(torch.double)
+
+    @staticmethod
+    def backward(ctx, grad):
+        mu, Sigma = ctx.saved_tensors
+        Sigma_repeated = Sigma.unsqueeze(1).repeat(1, mu.shape[1])
+        truncated_expectation = -torch.sqrt((2 * Sigma_repeated) / (2 * math.pi)) * torch.exp(-1/2 * mu ** 2 / (2 * Sigma_repeated))
+        return grad.unsqueeze(1).repeat(1, mu.shape[1]) * (2 * Sigma_repeated) ** -1 * truncated_expectation, torch.tensor(0)
+
+
+def erf_approximation(x):
+    x = torch.clamp(x, -2, 2)
+    summed = 0
+    for i in range(20):
+        summed += ((-1) ** i * x ** (2 * i + 1)) / (math.factorial(i) * (2 * i + 1))
+    return summed * 2 / math.sqrt(math.pi)

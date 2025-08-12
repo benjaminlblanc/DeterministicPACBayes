@@ -58,7 +58,7 @@ class klInvFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         q, epsilon = ctx.saved_tensors
-
+        q = q.to(torch.float32)
         if torch.isclose(q, torch.tensor(0.)) or torch.isclose(q, torch.tensor(1.)) or ctx.out == 0. or ctx.out == 1.:
             return grad_output * 0., grad_output * 0., None
 

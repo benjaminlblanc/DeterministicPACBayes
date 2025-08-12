@@ -20,6 +20,7 @@ training:
   distribution: "gaussian" # "dirichlet", "gaussian", "categorical"
   opt_bound: True # if False, optimize only risk
   rand_n: 0 # only for Bin
+  compute_dis: False
 
 
 dataset: 'SVMGUIDE'

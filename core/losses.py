@@ -1,14 +1,25 @@
 import torch
-from core.utils import BetaInc, Phi, mv_gaussian_cdf_precomputations, log_prob_bin
+from core.utils import BetaInc, Phi, gaussian_cdf_precomputations, log_prob_bin, value_to_one_hot
 
 
-def true_loss(y_target, y_pred, theta, distribution):
-    input = torch.where(y_target != y_pred, theta, -theta).sum(1)
-    heaviside = torch.heaviside(input, torch.tensor(0.))
-    if distribution == 'categorical':
-        return heaviside.detach() + input - input.detach()
-    elif distribution in ['dirichlet', 'gaussian']:
-        return [torch.sigmoid(inp) for inp in input]
+def true_loss(y_target, y_pred, theta, distribution, n_classes):
+    if distribution == "categorical":
+        y_pred_oh = value_to_one_hot(y_pred, n_classes)
+        weighted_preds = y_pred_oh.transpose(1, 2) * theta
+        summed_preds = torch.sum(weighted_preds, dim=2)
+        return torch.nn.CrossEntropyLoss()(summed_preds, y_target)
+    elif distribution == "dirichlet":
+        pass
+    elif distribution == "gaussian":
+        if len(theta.shape) == 1:
+            y_pred_oh = value_to_one_hot(y_pred, n_classes)
+            weighted_preds = y_pred_oh.transpose(1, 2) * theta
+            summed_preds = torch.sum(weighted_preds, dim=2)
+
+        else:
+            summed_preds = torch.matmul(y_pred, theta)
+        return torch.nn.CrossEntropyLoss(reduction='none')(summed_preds, y_target.squeeze())
+
 
 def triple_loss(y_target, y_pred, theta, predictor, distribution, n_classes):
     first_loss = moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, order=1)
@@ -43,9 +54,9 @@ def moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, ord
                 inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(theta, (1, -1)) * y_pred, dim=1)) / torch.sum(y_pred ** 2, dim=1) ** 0.5
                 return Phi(inner_Phi) ** order
             else:
-                return mv_gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, torch.tensor(order))
+                return gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, torch.tensor(order), predictor)
 
         elif distribution == 'categorical':
             return torch.where(y_target != y_pred, theta, torch.tensor(0.)).sum(1) ** order
     elif predictor in ["resnet18"] and distribution == 'gaussian':
-        return None
+        return gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, torch.tensor(order), predictor)

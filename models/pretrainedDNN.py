@@ -4,14 +4,14 @@ from core.distributions import Gaussian
 
 
 def pretrainedDNN(pred):
-    if pred == 'resnet18':
-        model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', weights="ResNet18_Weights.DEFAULT")
+    if pred[:6] == 'resnet':
+        model = torch.hub.load('pytorch/vision:v0.10.0', pred, weights=f"ResNet{pred[6:]}_Weights.DEFAULT")
 
         # We only keep the embedding
         model.fc = nn.Identity()
         model.eval()
     else:
-        raise NotImplementedError("model.pred should be one the following: [stumps-uniform, rf, resnet152]")
+        raise NotImplementedError("model.pred should be one the following: stumps-uniform, rf, resnet18, resnet34, resnet50, resnet101, resnet152.")
     return model
 
 class LinearMultiClassifier(torch.nn.Linear):
@@ -20,8 +20,7 @@ class LinearMultiClassifier(torch.nn.Linear):
         if distr != "gaussian":
             raise NotImplementedError
 
-        self.num_voters = len(prior)
-        post = torch.rand(self.num_voters) * 4 - 2  # uniform draws in [-2, 2]
+        post = torch.normal(0, 0.01, prior.shape, dtype=dtype)
         self.post = torch.nn.Parameter(post, requires_grad=True)
 
         self.prior = prior
@@ -33,12 +32,12 @@ class LinearMultiClassifier(torch.nn.Linear):
     def forward(self, x):
         return x
 
-    def risk(self, batch, loss=None, mean=True):
+    def risk(self, batch, loss=None, mean=True, centered=True):
 
         if loss is not None:
             return self.distribution.approximated_risk(batch, loss, mean)
 
-        return self.distribution.risk(batch, mean)
+        return self.distribution.risk(batch, mean, centered=centered)
 
     def KL(self):
 
@@ -60,24 +59,9 @@ class LinearMultiClassifier(torch.nn.Linear):
         return self.post.grad
 
     def set_post(self, value):
-
-        assert len(value) == self.num_voters
-
-        if self.distr_name == "categorical": # make sure params sum to 1
-            self.post = torch.nn.Parameter(value, requires_grad=True)
-            self.distribution.theta = self.post
-
-        elif self.distribution_name == "dirichlet":
-            assert all(value > 0), "all posterior parameters must be positive"
-            self.post = torch.nn.Parameter(torch.log(value), requires_grad=True) # use log (and apply exp(post) later so that posterior parameters are always positive)
-            self.distribution.alpha = self.post
-
-        elif self.distribution_name == "gaussian":
-            self.post = torch.nn.Parameter(value, requires_grad=True)
-            self.distribution.w = self.post
+        self.post = torch.nn.Parameter(value, requires_grad=True)
+        self.distribution.w = self.post
 
     def random_draw_new_post(self):
         value = self.distribution.rsample()
-        if self.distribution_name == "dirichlet":
-            value *= self.prior.sum()
-        self.set_post(value)
+        self.set_post(value.reshape(-1, self.n_classes))

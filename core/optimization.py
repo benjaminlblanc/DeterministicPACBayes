@@ -101,7 +101,8 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
 
     if bounds is not None:
         for k in bounds.keys():
-            total_metrics[k] = bounds[k](n, model, risk, False).item()
+            if bounds[k] is not None:
+                total_metrics[k] = bounds[k](n, model, risk, False).item()
 
     if monitor:
         monitor.write(epoch, **{tag: total_metrics})
@@ -142,7 +143,7 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
 
 def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, risk_type, n, loss=None, monitor=None,
-                       num_epochs=100, lr_scheduler=None, test_bound=None, distribution_name='', n_classes=0, pred_type='rf'):
+                       num_epochs=100, lr_scheduler=None, test_bound=None, distribution_name='', n_classes=0, pred_type='rf', compute_dis=False):
 
     best_bound = float("inf")
     best_model = deepcopy(model)
@@ -163,23 +164,33 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
         train_routine(trainloader, model, optimizer, epoch=e, bound=bound, loss=loss, monitor=monitor)
 
         train_stats = val_routine(trainloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train")  # just for monitoring purposes
-
         no_improv += 1
-        if train_stats[bound_type] < best_bound:
-            best_bound = train_stats[bound_type]
-            best_train_stats = train_stats
-            best_model = deepcopy(model)
-            no_improv = 0
+        if bound is not None:
+            if train_stats[bound_type] < best_bound:
+                best_bound = train_stats[bound_type]
+                best_train_stats = train_stats
+                best_model = deepcopy(model)
+                no_improv = 0
 
-        # reduce learning rate if needed
-        if lr_scheduler:
-            lr_scheduler.step(train_stats[bound_type])
+            # reduce learning rate if needed
+            if lr_scheduler:
+                lr_scheduler.step(train_stats[bound_type])
+
+            pbar.set_description("train obj %s" % train_stats[bound_type])
+        else:
+            if train_stats["error"] < best_bound:
+                best_bound = train_stats["error"]
+                best_train_stats = train_stats
+                best_model = deepcopy(model)
+                no_improv = 0
+            if lr_scheduler:
+                lr_scheduler.step(train_stats["error"])
+
+            pbar.set_description("train obj %s" % train_stats["error"])
 
         if no_improv == num_epochs // 4:
             break
-
-        pbar.set_description("train obj %s" % train_stats[bound_type])
-
+    print()
     t2 = time()
 
     train_error = val_routine(trainloader, best_model)
@@ -191,7 +202,7 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     else:
         triple_bnd = (None, None, None)
 
-    if risk_type in ['FO', 'Dis_Renyi']:
+    if risk_type in ['FO', 'Dis_Renyi'] and compute_dis:
         test_errors = []
         bounds = []
         model_to_try = deepcopy(best_model)
@@ -211,6 +222,11 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
         final_bound['bound_sampled'] = 0
         final_bound['bound_sampled_std'] = 0
 
-    print(f"Test error: {test_error['error']}; {bound_type} bound: {best_train_stats[bound_type]}\n")
+    string = f"Test error: {test_error['error']}"
+    if bound is not None:
+        string += f"; {bound_type} bound: {best_train_stats[bound_type]}\n"
+    else:
+        string += "\n"
+    print(string)
 
     return best_model, final_bound, train_error, test_error, t2 - t1, triple_bnd[0], triple_bnd[1]
