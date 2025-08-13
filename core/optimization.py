@@ -17,7 +17,7 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
     for i, batch in enumerate(dataloader):
 
         n = len(batch[0])
-        data = batch[1], model(batch[0])
+        data = batch[1], batch[0]
 
         # import pdb; pdb.set_trace()
         optimizer.zero_grad()
@@ -45,8 +45,7 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
         X = [batch[0] for batch in batches]
         # sum sizes of loaders
         n = sum(map(len, X))
-        pred = model(X)
-        data = [(batches[i][1], pred[i]) for i in range(len(batches))]
+        data = [(batches[i][1], X[i]) for i in range(len(batches))]
         optimizer.zero_grad()
         n_alphas = len(model.get_post())
 
@@ -65,7 +64,7 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
             monitor.write_all(last_iter + i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
 
 
-def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, centered=True, tag="val"):
+def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):
     model.eval()
 
     risk = 0.
@@ -73,8 +72,8 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
     n, n_1, n_2, n_3 = 0, 0, 0, 0
 
     for batch in dataloader:
-        data = batch[1], model(batch[0])
-        model_risk = model.risk(data, loss=loss, mean=False, centered=centered)
+        data = batch[1], batch[0]
+        model_risk = model.risk(data, loss=loss, mean=False)
         if type(model_risk) != tuple:
             risk += model_risk
             n += len(data[0])
@@ -107,7 +106,7 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
     return total_metrics
 
 
-def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, monitor=None, centered=True, tag="val"):
+def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):
     model.eval()
 
     risk = 0.
@@ -115,14 +114,10 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
     for batches in zip(*dataloaders):
         X = [batch[0] for batch in batches]
-        try:
-            pred = model(X)
-            data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-            risk += model.risk(data, loss=loss, mean=False, centered=centered)
-        except RuntimeError:
-            pred = model.voters_forward(X)
-            data = [(batches[i][1], pred[i]) for i in range(len(batches))]
-            risk += model.risk(data, loss=loss, mean=False, centered=centered)
+        data = [(batches[i][1], X[i]) for i in range(len(batches))]
+        risk += model.risk(data, loss=loss, mean=False)
+
+
         n += len(X[0])
 
     risk /= n
@@ -141,7 +136,7 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
 def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, risk_type, n, loss=None, monitor=None,
                        num_epochs=100, lr_scheduler=None, test_bound=None, distribution_name='', n_classes=0, pred_type='rf',
-                       compute_dis=False, output_type='class'):
+                       compute_disintegration=False, output_type='class'):
 
     best_bound = float("inf")
     best_model = deepcopy(model)
@@ -198,14 +193,14 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     else:
         triple_bnd = (None, None, None)
 
-    if risk_type in ['FO', 'Dis_Renyi'] and compute_dis:
+    if risk_type in ['FO', 'Dis_Renyi'] and compute_disintegration:
         test_errors = []
         bounds = []
         model_to_try = deepcopy(best_model)
         best_model_post = best_model.get_post()
         for i in range(20):
             model_to_try.random_draw_new_post()
-            test_errors.append(test_routine(testloader, model_to_try, centered=False)['error'])
+            test_errors.append(test_routine(testloader, model_to_try)['error'])
             bounds.append(compute_bound(model_to_try, bound, n, trainloader, loss, True))
             model_to_try.set_post(best_model_post)
         test_error['error_sampled'] = torch.mean(torch.tensor(test_errors)).item()

@@ -1,0 +1,32 @@
+project_name:
+dataset:
+num_trials:
+num_workers:
+is_using_wandb:
+
+model:
+  M:
+  prior:
+  pred:
+  stump_init:
+  samples_prop:
+  max_tree_depth:
+  posterior_std:
+  output:
+
+training:
+  seed:
+  lr:
+  batch_size:
+  num_epochs:
+  risk:
+  distribution:
+  rand_n:
+  compute_disintegration:
+  normalize_data:
+
+bound:
+  delta:
+  type:
+  order:
+  n_grid:

@@ -30,10 +30,9 @@ class Categorical():
         b = beta / beta.sum()
         return (1 / (order - 1)) * torch.log((t ** order / b ** (order - 1)).sum())
 
-    def KL_dis(self, beta):
+    def KL_disintegrated(self, beta):
         t = self.get_theta()
-        assert (
-                           t ** 2).sum() == 1, 'To use KL_dis() on the Categorical distribution, the distribution must be centered on a one-hot vector.'
+        assert (t ** 2).sum() == 1, 'To use KL_dis() on the Categorical distribution, the distribution must be centered on a one-hot vector.'
 
         b = beta / beta.sum()
         for i in range(len(t)):
@@ -57,7 +56,8 @@ class Categorical():
             return r.mean()
         return r.sum()
 
-    def risk(self, batch, mean=True, centered=True):
+    def deterministic_risk(self, batch, mean=True):
+        centered = torch.prod(torch.tensor(self.theta ** 2 == self.theta))
         theta = self.get_theta() if centered else self.theta
         y_target, y_pred = batch
         y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
@@ -71,7 +71,7 @@ class Categorical():
             return r.mean()
         return r.sum()
 
-    def rsample(self):
+    def random_sample(self):
 
         cum_pro = torch.cumsum(self.get_theta(), dim=0)
         cum_pro = torch.hstack((torch.zeros(1), cum_pro))
@@ -108,7 +108,7 @@ class Dirichlet():
 
         return res
 
-    def KL_dis(self, beta):
+    def KL_disintegrated(self, beta):
 
         exp_alpha = torch.exp(self.alpha)
         res = Dir(exp_alpha).log_prob(exp_alpha / exp_alpha.sum())
@@ -116,7 +116,7 @@ class Dirichlet():
 
         return res
 
-    def risk(self, batch, mean=True, centered=None):
+    def deterministic_risk(self, batch, mean):
         alpha = torch.exp(self.alpha)
         y_target, y_pred = batch
         y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
@@ -147,8 +147,7 @@ class Dirichlet():
 
         return sum(r)
 
-
-    def rsample(self):
+    def random_sample(self):
 
         return Dir(torch.exp(self.alpha)).rsample()
 
@@ -168,15 +167,14 @@ class Gaussian():
     def Renyi(self, beta, order):
         return order * self.KL(beta)
 
-    def KL_dis(self, beta):
-
+    def KL_disintegrated(self, beta):
         res = Gaus(self.w, torch.eye(len(self.w))).log_prob(self.w)
         res -= Gaus(beta, torch.eye(len(beta))).log_prob(beta)
         return res
 
-    def risk(self, batch, mean=True, centered=None):
+    def deterministic_risk(self, batch, mean=True):
         y_target, y_pred = batch
-        if len(self.w.shape) == 2:
+        if self.output_type == 'embedding':
             summed_preds = torch.matmul(y_pred, self.w)
         elif self.output_type == 'class':
             y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
@@ -212,9 +210,9 @@ class Gaussian():
 
         return sum(r)
 
-    def rsample(self):
+    def random_sample(self):
         w = torch.reshape(self.w, (-1, 1))
-        return Gaus(w.squeeze(), torch.eye(len(w), dtype=torch.double)).rsample()
+        return Gaus(w.squeeze(), torch.eye(len(w))).rsample()
 
 
 distr_dict = {

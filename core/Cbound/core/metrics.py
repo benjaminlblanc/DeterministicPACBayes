@@ -15,7 +15,7 @@ class MetaMetrics(type):
     def __get_class_dict(cls):
         class_dict = {}
         for class_name, class_ in inspect.getmembers(
-            importlib.import_module("Cbound.core.metrics"), inspect.isclass
+            importlib.import_module("core.Cbound.core.metrics"), inspect.isclass
         ):
             if(class_name != "MetaMetrics" and class_name != "Metrics"):
                 class_name = class_name.replace("Metrics", "")

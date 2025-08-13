@@ -7,6 +7,7 @@ def create_config_dico(cfg):
     else:
         dataset_name = cfg['dataset']['distr']
     dico = {'project_name': cfg['project_name'],
+            'dataset': dataset_name,
             'num_trials': cfg['num_trials'],
             'num_workers': cfg['num_workers'],
             'is_using_wandb': cfg['is_using_wandb'],
@@ -14,17 +15,18 @@ def create_config_dico(cfg):
             'prior': cfg['model']['prior'],
             'pred': cfg['model']['pred'],
             'stump_init': cfg['model']['stump_init'],
-            'bootstrap': cfg['model']['bootstrap'],
-            'tree_depth': cfg['model']['tree_depth'],
+            'samples_prop': cfg['model']['samples_prop'],
+            'max_tree_depth': cfg['model']['max_tree_depth'],
+            'posterior_std': cfg['model']['posterior_std'],
+            'output': cfg['model']['output'],
             'seed': cfg['training']['seed'],
             'lr': cfg['training']['lr'],
             'batch_size': cfg['training']['batch_size'],
+            'normalize_data': cfg['training']['normalize_data'],
             'num_epochs': cfg['training']['num_epochs'],
             'risk': cfg['training']['risk'],
             'distribution': cfg['training']['distribution'],
-            'opt_bound': cfg['training']['opt_bound'],
             'rand_n': cfg['training']['rand_n'],
-            'dataset': dataset_name,
             'delta': cfg['bound']['delta'],
             'type':  cfg['bound']['type'],
             'order':  cfg['bound']['order']}
@@ -35,4 +37,4 @@ def create_run_name(config, seed):
     Given a dictionary of config, returns a run name.
     """
     return 'dataset=' + config['dataset'] + '_distr=' + config['distribution'] + '_risk=' + config['risk'] + '_pred-type=' + \
-           config['pred'] + '_stump-init=' + str(config['stump_init']) + '_M=' + str(config['M']) + '_prior=' + str(config['prior']) + '_seed=' + str(seed)
+           config['pred'] + '_stump-init=' + str(config['stump_init']) + '_output=' + str(config['output']) + '_prior=' + str(config['prior']) + '_seed=' + str(seed)

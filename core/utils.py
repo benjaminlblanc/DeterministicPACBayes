@@ -12,21 +12,33 @@ epsilon = torch.tensor(1e-10)
 
 
 def whether_to_run_run(cfg):
-    if cfg.training.distribution in "dirichlet":
-        assert cfg.model.prior in ["adjusted", 1]
-        assert cfg.training.risk != "Dis_Renyi"
-    elif cfg.training.distribution in "categorical":
+    assert cfg.training.distribution in ["categorical", "dirichlet", "gaussian"]
+    if cfg.training.distribution == "categorical":
         assert cfg.model.prior == "adjusted"
         if cfg.training.risk == "Dis_Renyi":
             assert 1 < cfg.bound.order
+    elif cfg.training.distribution == "dirichlet":
+        assert cfg.model.prior in ["adjusted", 1]
+        assert cfg.training.risk != "Dis_Renyi"
     elif cfg.training.distribution == "gaussian":
         assert cfg.model.prior == 0
         if cfg.training.risk == "Dis_Renyi":
             assert 1 < cfg.bound.order < 2
+
+    assert cfg.model.pred in ['stumps-uniform', 'rf', 'LinearClassifier'],  "Not a valid choice of model."
+    if cfg.model.pred == 'LinearClassifier':
+        assert cfg.model.output == 'embedding', "LinearClassifier implies embedding"
+    elif cfg.model.pred == 'stumps-uniform':
+        assert cfg.model.output == 'class', "stumps-uniform implies class"
+    elif cfg.model.pred == 'rf':
+        assert cfg.model.output in ['class', 'proba'], "rf implies class or proba"
+
+    assert cfg.training.risk in ['Tr', 'FO', 'SO', 'Bin', 'Dis_Renyi']
     if cfg.training.risk == "Bin":
         assert cfg.training.rand_n > 0
-    if cfg.model.pred not in ['stumps-uniform', 'rf', 'LinearClassifier']:
-        assert "Not a valid choice of model."
+    if cfg.training.risk == "Dis_Renyi":
+        assert cfg.training.compute_disintegration, 'When using risk = Dis_Renyi, the disintegrated computation mus tbe on.'
+
 
 def updating_first_seed_results(seed_results, time, train_err, test_err, deterministic_bound, final_bound, ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune):
     seed_results["train-error"] = train_err['error']
@@ -260,7 +272,7 @@ class NormalCDF(torch.autograd.Function):
     @staticmethod
     def forward(ctx, mu, Sigma):
         ctx.save_for_backward(mu, Sigma)
-        return torch.prod(1/2 * (1 - erf_approximation(mu / (torch.sqrt(2 * (2 * Sigma.unsqueeze(1).repeat(1, mu.shape[1])))))), dim=1).to(torch.double)
+        return torch.prod(1/2 * (1 - erf_approximation(mu / (torch.sqrt(2 * (2 * Sigma.unsqueeze(1).repeat(1, mu.shape[1])))))), dim=1)
 
     @staticmethod
     def backward(ctx, grad):

@@ -117,7 +117,7 @@ def generate_latex_table(final_results):
 
 file = 'wandb_export_2025-07-18T21_28_46.996-04_00.csv'
 hyperparams = ['M', 'batch_size', 'bootstrap', 'dataset', 'delta', 'distribution', 'is_using_wandb', 'lr',
-               'num_epochs', 'num_trials', 'num_workers', 'opt_bound', 'order', 'pred', 'prior', 'project_name', 'rand_n',
+               'num_epochs', 'num_trials', 'num_workers', 'order', 'pred', 'prior', 'project_name', 'rand_n',
                'risk', 'stochastic', 'stump_init', 'type', 'uniform']
 num_results = ['deterministic_bound_sampled_std', 'test-error', 'test-error_finetune', 'test-error_sampled', 'test-error_sampled_std']  # Do not change that order
 metric = ['ben_triple_bound_with_finetune', 'deterministic_bound', 'deterministic_bound_sampled']
