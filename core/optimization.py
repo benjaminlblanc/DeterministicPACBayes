@@ -38,7 +38,6 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
     model.train()
 
     last_iter = epoch * len(dataloaders[0])
-    train_obj = 0.
 
     pbar = range(len(dataloaders[0]))
 
@@ -59,8 +58,6 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
 
         else:
             cost = model.risk(data, loss)
-
-        train_obj += cost.item()
         cost.backward()
         optimizer.step()
 
@@ -143,7 +140,8 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
 
 def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_type, risk_type, n, loss=None, monitor=None,
-                       num_epochs=100, lr_scheduler=None, test_bound=None, distribution_name='', n_classes=0, pred_type='rf', compute_dis=False):
+                       num_epochs=100, lr_scheduler=None, test_bound=None, distribution_name='', n_classes=0, pred_type='rf',
+                       compute_dis=False, output_type='class'):
 
     best_bound = float("inf")
     best_model = deepcopy(model)
@@ -162,7 +160,6 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     pbar = tqdm(range(num_epochs))
     for e in pbar:
         train_routine(trainloader, model, optimizer, epoch=e, bound=bound, loss=loss, monitor=monitor)
-
         train_stats = val_routine(trainloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train")  # just for monitoring purposes
         no_improv += 1
         if bound is not None:
@@ -197,7 +194,7 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, bound_t
     final_bound = {'bound': best_bound}
 
     if risk_type == "FO":
-        triple_bnd = compute_bound(model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, pred_type, distribution_name, n_classes), False)
+        triple_bnd = compute_bound(model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, pred_type, distribution_name, n_classes, output_type), False)
     else:
         triple_bnd = (None, None, None)
 

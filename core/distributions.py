@@ -12,7 +12,7 @@ def log_Beta(vec):
 
 class Categorical():
 
-    def __init__(self, theta, n_classes):
+    def __init__(self, theta, n_classes, _):
         self.theta = theta
         self.n_classes = n_classes
 
@@ -85,7 +85,7 @@ class Categorical():
 
 class Dirichlet():
 
-    def __init__(self, alpha, n_classes):
+    def __init__(self, alpha, n_classes, _):
 
         self.alpha = alpha
         self.n_classes = n_classes
@@ -155,10 +155,11 @@ class Dirichlet():
 
 class Gaussian():
 
-    def __init__(self, w, n_classes):
+    def __init__(self, w, n_classes, output_type):
 
         self.w = w
         self.n_classes = n_classes
+        self.output_type = output_type
 
     # Kullback-Leibler divergence between two Gaussian
     def KL(self, beta):
@@ -177,9 +178,12 @@ class Gaussian():
         y_target, y_pred = batch
         if len(self.w.shape) == 2:
             summed_preds = torch.matmul(y_pred, self.w)
-        else:
+        elif self.output_type == 'class':
             y_pred_oh = value_to_one_hot(y_pred, self.n_classes)
             weighted_preds = y_pred_oh.transpose(1, 2) * self.w
+            summed_preds = torch.sum(weighted_preds, dim=2)
+        else:
+            weighted_preds = y_pred.transpose(1, 2) * self.w
             summed_preds = torch.sum(weighted_preds, dim=2)
         agg_preds = torch.argmax(summed_preds, dim=1).reshape(-1, 1)
 

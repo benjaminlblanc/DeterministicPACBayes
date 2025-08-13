@@ -10,6 +10,7 @@ model:
   stump_init: "rand" # ones, rand
   bootstrap: 0.5 # only for pred = rf
   tree_depth: None # only for pred = rf
+  output: class
 
 training:
   seed: 541944

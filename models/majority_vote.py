@@ -4,7 +4,7 @@ from core.distributions import distr_dict
 
 class MajorityVote(torch.nn.Module):
 
-    def __init__(self, voters, prior, n_classes, distr="dirichlet", kl_factor=1.):
+    def __init__(self, voters, prior, n_classes, distr="dirichlet", kl_factor=1., output_type='class'):
 
         super(MajorityVote, self).__init__()
         
@@ -20,10 +20,11 @@ class MajorityVote(torch.nn.Module):
             post = torch.rand(self.num_voters) * 4 - 2  # uniform draws in [-2, 2]
             self.post = torch.nn.Parameter(post, requires_grad=True)
 
+        self.output_type = output_type
         self.prior = prior
         self.voters = voters
         self.n_classes = n_classes
-        self.distribution = distr_dict[distr](self.post, self.n_classes)
+        self.distribution = distr_dict[distr](self.post, self.n_classes, self.output_type)
         self.distribution_name = distr
         self.kl_factor = kl_factor
 
@@ -82,21 +83,14 @@ class MajorityVote(torch.nn.Module):
 
 class MultipleMajorityVote(torch.nn.Module):
 
-    def __init__(self, voter_sets, priors, n_classes, weights, posteriors=None, distr="dirichlet",  kl_factor=1.):
+    def __init__(self, voter_sets, priors, n_classes, weights, posteriors=None, distr="dirichlet",  kl_factor=1., output_type='class'):
 
         super(MultipleMajorityVote, self).__init__()
 
         assert len(voter_sets) == len(priors), "must specify same number of voter_sets and priors"
         assert sum(weights) == 1., weights
 
-        if posteriors is not None:
-            assert len(priors) == len(posteriors), "must specify same number of priors and posteriors"
-
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, n_classes, posterior=post, distr=distr, kl_factor=kl_factor) for voters, prior, post in zip(voter_sets, priors, posteriors)])
-
-        else:
-            self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, n_classes, distr=distr, kl_factor=kl_factor) for voters, prior in zip(voter_sets, priors)])
-
+        self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, n_classes, distr=distr, kl_factor=kl_factor, output_type=output_type) for voters, prior in zip(voter_sets, priors)])
         self.weights = weights
         self.distribution_name = distr
 

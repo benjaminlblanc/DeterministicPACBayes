@@ -51,12 +51,12 @@ def main(cfg):
     n_classes = get_n_classes(cfg.dataset)
     multiclass = n_classes > 2
     risks = { # type: (loss, bound_coeff, distribution_type, kl_factor, div)
-        "Tr": (lambda x, y, z: true_loss(x, y, z, distribution_name), 1., distribution_name, 1., 'KL'),
-        "Triple": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),
-        "FO": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
-        "SO": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=2), 4., distribution_name, 2., 'KL'),
-        "Bin": (lambda x, y, z: bin_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, n=cfg.training.rand_n), 2., distribution_name, cfg.training.rand_n, 'KL'),
-        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, order=1), 1., distribution_name, 1., 'Renyi'),
+        "Tr": (lambda x, y, z: true_loss(x, y, z, distribution_name, cfg.model.output), 1., distribution_name, 1., 'KL'),
+        "Triple": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, 1, cfg.model.output), 1., distribution_name, 1., 'KL'),
+        "FO": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, 1, cfg.model.output), 1., distribution_name, 1., 'KL'),  # The "2" factor is taken care of later
+        "SO": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, 2, cfg.model.output), 4., distribution_name, 2., 'KL'),
+        "Bin": (lambda x, y, z: bin_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, cfg.training.rand_n, cfg.model.output), 2., distribution_name, cfg.training.rand_n, 'KL'),
+        "Dis_Renyi": (lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, 1, cfg.model.output), 1., distribution_name, 1., 'Renyi'),
         "Cbound": (None, None, distribution_name, None, None),
     }
 
@@ -88,6 +88,7 @@ def main(cfg):
             except:
                 normalize = False if cfg.dataset in ["CIFAR10", "CIFAR100"] else True
                 data = Dataset(cfg.dataset, normalize=normalize, data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
+            n = len(data.X_train)
 
             if cfg.model.pred == "stumps-uniform":
                 predictors, M = uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0), cfg.model.stump_init)
@@ -97,7 +98,7 @@ def main(cfg):
                 if cfg.model.tree_depth == "None":
                     cfg.model.tree_depth = None
 
-                predictors, M = two_forests(cfg.model.M, 0.5, data.X_train, data.y_train, max_samples=cfg.model.bootstrap, max_depth=cfg.model.tree_depth, binary=data.binary)
+                predictors, M = two_forests(cfg.model.M, 0.5, data.X_train, data.y_train, max_samples=cfg.model.bootstrap, max_depth=cfg.model.tree_depth, binary=data.binary, output_type=cfg.model.output)
 
             else:
                 M = 1
@@ -112,7 +113,6 @@ def main(cfg):
             bound = None
             if cfg.training.opt_bound:
 
-                n = len(data.X_train)
                 bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
                 test_bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order)
 
@@ -128,7 +128,7 @@ def main(cfg):
             elif cfg.model.pred == "stumps-uniform":
                 betas = torch.ones(M) * prior_coefficient # prior
 
-                model = MajorityVote(predictors, betas, n_classes, distr=distribution_type, kl_factor=kl_factor)
+                model = MajorityVote(predictors, betas, n_classes, distr=distribution_type, kl_factor=kl_factor, output_type=cfg.model.output)
             else:
                 # If needed, we reshape the images
                 data.X_train = torch.tensor(data.X_train, dtype=torch.double)
@@ -196,7 +196,7 @@ def main(cfg):
                 final_bound = {'bound': Cbound}
             else:
                 # First training phase
-                model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes, pred_type=cfg.model.pred)
+                model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, cfg.bound.type, cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes, pred_type=cfg.model.pred, output_type=cfg.model.output)
                 if cfg.training.risk == "FO":
                     ben_bound_no_finetune, triple_bound_no_finetune, ben_triple_bound_no_finetune = compute_det_bound(model, bound, n, M, trainloader, loss, distribution_name, final_bound['bound'], b_surrogate, c_surrogate, multiclass)
                     deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution == "categorical" else 2
@@ -230,9 +230,9 @@ def main(cfg):
                     optimizer = Adam(model.parameters(), lr=cfg.training.lr / 10)
                     # init learning rate scheduler
                     lr_scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=2)
-                    loss, bound_coeff, distribution_type, kl_factor, div = (lambda x, y, z: triple_loss(x, y, z, cfg.model.pred, distribution_name, n_classes), 1., distribution_name, 1., 'KL')
+                    loss, bound_coeff, distribution_type, kl_factor, div = (lambda x, y, z: triple_loss(x, y, z, cfg.model.pred, distribution_name, n_classes, cfg.model.output), 1., distribution_name, 1., 'KL')
                     bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False, bound_coeff, cfg.bound.order, True)
-                    model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes, pred_type=cfg.model.pred)
+                    model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = stochastic_routine(trainloader, testloader, model, optimizer, bound, 'triple', cfg.training.risk, n, loss=loss, monitor=monitor, num_epochs=cfg.training.num_epochs, lr_scheduler=lr_scheduler, test_bound=test_bound, distribution_name=distribution_name, n_classes=n_classes, pred_type=cfg.model.pred, output_type=cfg.model.output)
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error, final_bound['bound'], final_bound, 2, 2, 2)
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error, 2, 2, 2, i)
                 else:

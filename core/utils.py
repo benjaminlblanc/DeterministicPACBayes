@@ -211,7 +211,7 @@ def purge_redundant_mv_variables(y_pred_minus_y_i, mu, Sigma):
 def is_psd(mat):
     return bool((mat == mat.T).all() and (torch.linalg.eigvals(mat).real>=0).all())
 
-def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred_type):
+def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred_type, output_type):
     cdfs = []
     mus = []
     Sigmas = []
@@ -219,34 +219,40 @@ def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred
         y_target_is_i = (y_target == i).squeeze()
         if torch.sum(y_target_is_i) > 0:
             if pred_type == "rf":
-                one_hot_y_pred = value_to_one_hot(y_pred[y_target_is_i], n_classes)
+                if output_type == 'class':
+                    one_hot_y_pred = value_to_one_hot(y_pred[y_target_is_i], n_classes)
+                else:
+                    one_hot_y_pred = y_pred[y_target_is_i]
                 oh_y_pred_minus_oh_y_i = one_hot_y_pred - one_hot_y_pred[:, :, [i]]
                 mu = create_mv_mu(theta, oh_y_pred_minus_oh_y_i)
                 Sigma = create_mv_Sigma(oh_y_pred_minus_oh_y_i)
                 purged_y_pred_minus_y_i, purged_mu, purged_Sigma = purge_redundant_mv_variables(oh_y_pred_minus_oh_y_i, mu, Sigma)
                 for j in range(len(mu)):
-                    cdfs.append(1 - MultinormalCDF.apply(purged_mu[j], purged_Sigma[j]) ** order.item())
+                    cdfs.append(1 - MultinormalCDF.apply(purged_mu[j], purged_Sigma[j], torch.tensor(output_type=='proba')) ** order.item())
             else:
                 mus.append(create_nn_mu(theta, y_pred[y_target_is_i], i))
                 Sigmas.append(create_nn_Sigma(y_pred[y_target_is_i]))
-    mu = torch.vstack(mus)
-    Sigma = torch.hstack(Sigmas)
-    cdfs += 1 - NormalCDF.apply(mu, Sigma) ** order.item()
+    if pred_type != "rf":
+        mu = torch.vstack(mus)
+        Sigma = torch.hstack(Sigmas)
+        cdfs += 1 - NormalCDF.apply(mu, Sigma) ** order.item()
     return cdfs
 
 class MultinormalCDF(torch.autograd.Function):
     """Cumulative distribution function of the multivariate normal distribution; its forward and backward passes"""
-
     @staticmethod
-    def forward(ctx, purged_mu, purged_Sigma):
-        ctx.save_for_backward(purged_mu, purged_Sigma)
+    def forward(ctx, purged_mu, purged_Sigma, output_type):
+        ctx.save_for_backward(purged_mu, purged_Sigma, output_type)
         return torch.tensor(multivariate_normal.cdf(torch.zeros(len(purged_mu)), purged_mu, purged_Sigma, abseps=1e-2, releps=1e-2), dtype=torch.float32)
 
     @staticmethod
     def backward(ctx, grad):
-        purged_mu, purged_Sigma = ctx.saved_tensors
-        truncated_expectation = -torch.sqrt(torch.diagonal(purged_Sigma) / (2 * math.pi)) * torch.exp(-1/2 * purged_mu ** 2 / purged_Sigma)
-        return grad * torch.matmul(torch.inverse(purged_Sigma), truncated_expectation), torch.tensor(0)
+        purged_mu, purged_Sigma, output_type = ctx.saved_tensors
+        if output_type == 1:
+            truncated_expectation = -torch.sqrt(torch.diagonal(purged_Sigma) / (2 * math.pi)) * torch.exp(-1/2 * torch.matmul(torch.matmul(purged_mu.reshape(1, -1), torch.inverse(purged_Sigma)), purged_mu))
+        else:
+            truncated_expectation = -torch.sqrt(torch.diagonal(purged_Sigma) / (2 * math.pi)) * torch.exp(-1 / 2 * purged_mu ** 2 / purged_Sigma)
+        return grad * torch.matmul(torch.inverse(purged_Sigma), truncated_expectation), torch.tensor(0), torch.tensor(0)
 
 class NormalCDF(torch.autograd.Function):
     """Cumulative distribution function of the normal distribution; its forward and backward passes"""
