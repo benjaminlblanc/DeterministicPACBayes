@@ -1,6 +1,6 @@
 name=DeterministicPACBayes
 wandb=True
-prd=rf
+prd=RandomForests
 m=100
 trials=5
 seed=541944

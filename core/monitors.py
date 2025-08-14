@@ -2,36 +2,18 @@ import torch
 
 from tensorboardX import SummaryWriter
 
-class MonitorMV():
-
+class MonitorMV:
+    """
+    A class for writing the relevant information in the console during the training and saving it afterward.
+    """
     def __init__(self, logdir):
-
         super(MonitorMV, self).__init__()
 
         self.logdir = logdir
         self.writer = SummaryWriter(logdir)
-
         self.it = 0
 
-    def write_all(self, it, posterior, gradient, **metrics):
-
-        self.it = it
-
-        self.writer.add_scalars('variables/posterior', 
-            { 
-             "l2": torch.norm(posterior, p=2),
-             "l1": torch.norm(posterior, p=1),
-             }, it)
-
-        self.writer.add_scalars('variables/post_grad', 
-            { 
-             "l2": torch.norm(gradient, p=2),
-             }, it)
-
-        self.write(it, **metrics)
-
     def write(self, it=None, **metrics):
-        
         if it is None:
             it = self.it
 

@@ -9,8 +9,7 @@ from category_encoders.ordinal import OrdinalEncoder
 from data.utils import get_validation_set, download, read_idx_file
 import torch
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress INFO, WARNING, and ERROR messages
-# BINARY CLASSIFICATION
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress INFO, WARNING, and ERROR messages when loading the datasets.
 
 def fetch_SVMGUIDE1(path, valid_size=0.2, test_size=0.2, seed=None):
 

@@ -1,6 +1,6 @@
 name=DeterministicPACBayes
 wandb=True
-prd=stumps-uniform
+prd=UniformStumps
 m=10
 trials=5
 seed=541944

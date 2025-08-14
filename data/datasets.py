@@ -1,5 +1,4 @@
 from data.real_datasets import *
-from data.toy_datasets import *
 
 BINARY_DATASETS = {
     'MUSH': fetch_MUSHROOMS,
@@ -11,7 +10,7 @@ BINARY_DATASETS = {
     'SVMGUIDE': fetch_SVMGUIDE1
 }
 
-MC_DATASETS = {
+MULTICLASS_DATASETS = {
     'MNIST': fetch_MNIST,
     'PENDIGITS': fetch_PENDIGITS,
     'PROTEIN': fetch_PROTEIN,
@@ -46,10 +45,10 @@ class Dataset:
             self.binary = True
             data_dict = BINARY_DATASETS[dataset](path / dataset, valid_size=valid_size, **kwargs)
 
-        elif dataset in MC_DATASETS:
+        elif dataset in MULTICLASS_DATASETS:
 
             self.binary = False
-            data_dict = MC_DATASETS[dataset](path / dataset, valid_size=valid_size, **kwargs)
+            data_dict = MULTICLASS_DATASETS[dataset](path / dataset, valid_size=valid_size, **kwargs)
 
         else:
             raise NotImplementedError("Dataset not supported")
@@ -81,18 +80,13 @@ class Dataset:
         self.dataset = dataset
 
 class TorchDataset(torch.utils.data.Dataset):
-
     def __init__(self, X, y):
-        
         self.num_data = len(X)
-
         self.X = X
         self.y = y[:, None]
 
     def __len__(self):
-
         return self.num_data
 
     def __getitem__(self, idx):
-        # import pdb; pdb.set_trace()
         return self.X[idx], self.y[idx]

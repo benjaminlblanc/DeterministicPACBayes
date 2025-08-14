@@ -32,7 +32,7 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
         optimizer.step()
 
         if monitor:
-            monitor.write_all(last_iter + i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
+            monitor.write(last_iter + i, train={"Train-obj": cost.item()})
 
 def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, loss=None, monitor=None, true_risk_bounding=False):
     model.train()
@@ -61,7 +61,7 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
         optimizer.step()
 
         if monitor:
-            monitor.write_all(last_iter + i, model.get_post(), model.get_post_grad(), train={"Train-obj": cost.item()})
+            monitor.write(last_iter + i, train={"Train-obj": cost.item()})
 
 
 def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, tag="val"):

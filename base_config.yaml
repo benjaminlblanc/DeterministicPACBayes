@@ -1,32 +1,32 @@
 project_name: "DeterministicPACBayes"
 dataset: 'SVMGUIDE'
 num_trials: 10
-num_workers: 8 # for dataloaders
+num_workers: 8
 is_using_wandb: False
 
 model:
-  M: 10 # number of predictors: if stumps, 2*M per feature dimension; if rf, M tree per forest.
-  prior: 0 # param of the distribution prior
-  pred: "stumps-uniform" # stumps-uniform, rf, LinearClassifier
-  stump_init: "rand" # ones, rand
-  samples_prop: 0.5 # only for pred = rf
-  max_tree_depth: None # only for pred = rf
-  posterior_std: 0.1 # only for pred = LinearClassifier
-  output: class # class, proba, embedding
+  M: 10
+  prior: 0
+  pred: "UniformStumps"
+  stump_init: "rand"
+  samples_prop: 0.5
+  max_tree_depth: None
+  posterior_std: 0.1
+  output: class
 
 training:
   seed: 541944
   lr: 0.1
   batch_size: 1024
   num_epochs: 100
-  risk: "Dis_Renyi" # Tr, FO, SO, Bin, Dis_Renyi, Cbound
-  distribution: "gaussian" # dirichlet, gaussian, categorical
-  rand_n: 0 # only for risk = Bin
-  compute_disintegration: False # only for risk in FO, Dis_Renyi
+  risk: "Dis_Renyi"
+  distribution: "gaussian"
+  rand_n: 0
+  compute_disintegration: False
   normalize_data: True
 
 bound:
   delta: 0.05
   type: "seeger"
-  order: 1.5 # only for risk = Dis_Renyi
-  n_grid: 5 # only for risk = Dis_Renyi
+  order: 1.5
+  n_grid: 5

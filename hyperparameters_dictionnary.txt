@@ -1,32 +1,38 @@
-project_name:
-dataset:
-num_trials:
-num_workers:
-is_using_wandb:
+project_name (str): Project name in wandb and in local saves.
+dataset (str): Dataset to train on. Choices between (binary) 'MUSH', 'TTT', 'HABER', 'PHIS', 'ADULT', 'CODRNA',
+    'SVMGUIDE', (multi-class) 'MNIST', 'PENDIGITS', 'PROTEIN', 'SENSORLESS', 'SHUTTLE', 'FASHION', (embedded)
+    'CIFAR10_Inception_v3'.
+num_trials (int): Number of run (random seed) to consider.
+num_workers (int): For dataloaders.
+is_using_wandb (bool): Whether to save the results in wandb.
 
 model:
-  M:
-  prior:
-  pred:
-  stump_init:
-  samples_prop:
-  max_tree_depth:
-  posterior_std:
-  output:
+  M (int): Number of base classifiers, only for pred in [UniformStumps, RandomForests]: if UniformStumps, 2*M per
+    feature; if RandomForests, M tree per forest (two forests).
+  prior (int or str): Choices between and int or 'adjusted', meaning 1/number of base classifiers.
+  pred (str): Choices between UniformStumps, RandomForests, LinearClassifier.
+  stump_init (str): Choices between 'ones' and 'rand'. Only for pred = UniformStumps.
+  samples_prop (float): Proportion of examples to train the first forest VS the other. Only for pred = RandomForests.
+  max_tree_depth (int): sklearn.ensemble.RandomForestClassifier arguments. Only for pred = RandomForests.
+  posterior_std (float > 0): Standard deviation of the posterior initialization. Only for pred = LinearClassifier.
+  output (str): Choices between 'class', 'proba', 'embedding'. 'class' is such that the base classifier prediction is a
+    class, while for 'proba', the base classifier output the probability for each class. 'embedding' is such that an
+    embedding is computed in the place of the input.
 
 training:
-  seed:
-  lr:
-  batch_size:
-  num_epochs:
-  risk:
-  distribution:
-  rand_n:
-  compute_disintegration:
-  normalize_data:
+  seed (int): Random seed.
+  lr (float): Learning rate.
+  batch_size (int): Batch size
+  num_epochs (int): Maximum number of epochs to train on.
+  risk (str): Choices between 'Tr', 'FO', 'SO', 'Bin', 'Cbound', 'Dis_Renyi'. The first one train the true risk
+    directly. For the other ones, see the article. 'Dis_KL' is computed implicitly with 'FO'.
+  distribution (str): Choices between 'categorical', 'dirichlet', 'gaussian'.
+  rand_n (int): A parameter for the Binomial algorithm (see paper). Only for risk = 'Bin'.
+  compute_disintegration (bool): Whether to compute disintegrated bound. Only for risk in ['FO', 'Dis_Renyi'].
+  normalize_data (bool): Whether to normalize the features. Recommended to use True.
 
 bound:
-  delta:
-  type:
-  order:
-  n_grid:
+  delta (float): Confidence parameter.
+  type (str): Bound to optimize. Choices between 'seeger', 'mcallester'.
+  order: Parameter of the Renyi divergence. Only for risk = 'Dis_Renyi'.
+  n_grid: Number of order that are tested for the Renyi divergence. Only for risk = 'Dis_Renyi'.

@@ -10,7 +10,7 @@ def two_forests(M, r, X, y, samples_prop, max_depth, binary, output_type):
     M (int): number of tree per forest classifier.
     r (float): proportion of examples for training the first forest VS the other one.
     X, y: features and labels to learn on.
-    max_samples, max_depth (ints): sklearn.ensemble.RandomForestClassifier arguments.
+    max_samples, max_depth (ints): sklearn.ensemble.RandomForestClassifier argument.
     binary (bool): whether of not the dataset is binary.
     output_type (str): whether the trees must predict a class or a class probability for every class.
 

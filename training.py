@@ -85,10 +85,10 @@ def main(cfg):
             data = Dataset(cfg.dataset, normalize=cfg.training.normalize_data, data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
             n = len(data.X_train)
 
-            if cfg.model.pred == "stumps-uniform":
+            if cfg.model.pred == "UniformStumps":
                 predictors, M = uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0), cfg.model.stump_init)
 
-            elif cfg.model.pred == "rf": # random forest
+            elif cfg.model.pred == "RandomForests": # random forest
 
                 if cfg.model.max_tree_depth == "None":
                     cfg.model.max_tree_depth = None
@@ -111,14 +111,14 @@ def main(cfg):
             prior_coefficient = 1 / M if cfg.model.prior == "adjusted" else int(cfg.model.prior)
             prior_value = -5 if cfg.training.distribution == "categorical" else prior_coefficient
 
-            if cfg.model.pred == "rf":
+            if cfg.model.pred == "RandomForests":
                 betas = [torch.ones(M // 2) * prior_coefficient, torch.ones(M // 2) * prior_coefficient] # prior
 
                 # weights proportional to data sizes
                 model = MultipleMajorityVote(predictors, betas, n_classes, (0.5, 0.5), distribution_type,
                                              kl_factor, cfg.model.output)
 
-            elif cfg.model.pred == "stumps-uniform":
+            elif cfg.model.pred == "UniformStumps":
                 betas = torch.ones(M) * prior_coefficient # prior
 
                 model = MajorityVote(predictors, betas, n_classes, distribution_type, kl_factor, cfg.model.output)
@@ -142,7 +142,7 @@ def main(cfg):
                 model = LinearMultiClassifier(input_size, output_size, betas, cfg.model.posterior_std, cfg.model.output)
 
 
-            if cfg.model.pred == "rf":  # a loader per posterior
+            if cfg.model.pred == "RandomForests":  # a loader per posterior
                 m_train = len(data.X_train) // 2
                 data.X_train = model.voters_forward([data.X_train[m_train:], data.X_train[:m_train]])
 
@@ -165,7 +165,7 @@ def main(cfg):
                 testloader = [DataLoader(test1, batch_size=4096, num_workers=cfg.num_workers, shuffle=False),
                               DataLoader(test2, batch_size=4096, num_workers=cfg.num_workers, shuffle=False)]
             else:
-                if cfg.model.pred == "stumps-uniform":
+                if cfg.model.pred == "UniformStumps":
                     data.X_train = model.voters_forward(torch.tensor(data.X_train))
                     data.X_test = model.voters_forward(torch.tensor(data.X_test))
                 trainloader = DataLoader(TorchDataset(data.X_train, data.y_train), batch_size=cfg.training.batch_size,

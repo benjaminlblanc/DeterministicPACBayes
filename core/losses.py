@@ -43,7 +43,7 @@ def bin_loss(y_target, y_pred, theta, predictor, distribution, n_classes, n, out
     return bin_loss
 
 def moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, order, output_type):
-    if predictor in ["rf", "stumps-uniform"]:
+    if predictor in ["RandomForests", "UniformStumps"]:
         if distribution == 'dirichlet':
             correct = torch.where(y_target == y_pred, theta, torch.zeros(1)).sum(1)
             wrong = torch.where(y_target != y_pred, theta, torch.zeros(1)).sum(1)

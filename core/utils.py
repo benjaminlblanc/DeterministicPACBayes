@@ -8,8 +8,8 @@ from betaincder import betainc, betaincderp, betaincderq
 from torch import lgamma, log1p, exp, log
 from torch.special import erf
 
-epsilon = torch.tensor(1e-10)
 
+epsilon = torch.tensor(1e-10)
 
 def whether_to_run_run(cfg):
     assert cfg.training.distribution in ["categorical", "dirichlet", "gaussian"]
@@ -25,13 +25,16 @@ def whether_to_run_run(cfg):
         if cfg.training.risk == "Dis_Renyi":
             assert 1 < cfg.bound.order < 2
 
-    assert cfg.model.pred in ['stumps-uniform', 'rf', 'LinearClassifier'],  "Not a valid choice of model."
+    assert cfg.model.pred in ['UniformStumps', 'RandomForests', 'LinearClassifier'],  "Not a valid choice of model."
     if cfg.model.pred == 'LinearClassifier':
         assert cfg.model.output == 'embedding', "LinearClassifier implies embedding"
-    elif cfg.model.pred == 'stumps-uniform':
-        assert cfg.model.output == 'class', "stumps-uniform implies class"
-    elif cfg.model.pred == 'rf':
-        assert cfg.model.output in ['class', 'proba'], "rf implies class or proba"
+        assert cfg.dataset in ['CIFAR10_Inception_v3']
+    elif cfg.model.pred == 'UniformStumps':
+        assert cfg.model.output == 'class', "UniformStumps implies class"
+        assert cfg.dataset in ['MUSH', 'TTT', 'HABER', 'PHIS', 'ADULT', 'CODRNA', 'SVMGUIDE']
+    elif cfg.model.pred == 'RandomForests':
+        assert cfg.model.output in ['class', 'proba'], "RandomForests implies class or proba"
+        assert cfg.dataset in ['MNIST', 'PENDIGITS', 'PROTEIN', 'SENSORLESS', 'SHUTTLE', 'FASHION']
 
     assert cfg.training.risk in ['Tr', 'FO', 'SO', 'Bin', 'Dis_Renyi']
     if cfg.training.risk == "Bin":
@@ -230,7 +233,7 @@ def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred
     for i in range(n_classes):
         y_target_is_i = (y_target == i).squeeze()
         if torch.sum(y_target_is_i) > 0:
-            if pred_type == "rf":
+            if pred_type == "RandomForests":
                 if output_type == 'class':
                     one_hot_y_pred = value_to_one_hot(y_pred[y_target_is_i], n_classes)
                 else:
@@ -244,7 +247,7 @@ def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred
             else:
                 mus.append(create_nn_mu(theta, y_pred[y_target_is_i], i))
                 Sigmas.append(create_nn_Sigma(y_pred[y_target_is_i]))
-    if pred_type != "rf":
+    if pred_type != "RandomForests":
         mu = torch.vstack(mus)
         Sigma = torch.hstack(Sigmas)
         cdfs += 1 - NormalCDF.apply(mu, Sigma) ** order.item()
