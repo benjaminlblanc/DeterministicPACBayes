@@ -1,5 +1,47 @@
 import torch
-from core.utils import BetaInc, Phi, gaussian_cdf_precomputations, log_prob_bin, value_to_one_hot
+
+from core.expected_risk import gaussian_cdf_precomputations, BetaInc, value_to_one_hot
+from core.utils import Phi, log_prob_bin
+
+
+def initialize_risk(cfg, n_classes):
+    """
+    Initialize the loss function, the bound coefficient, kl factor and divergence type given the considered risk.
+    """
+    dst = cfg.training.distribution
+    if cfg.training.risk == "Tr":
+        loss = lambda x, y, z: true_loss(x, y, z, dst, cfg.model.output)
+        bound_coeff = 1.
+        kl_factor = 1.
+        div = 'KL'
+    elif cfg.training.risk == "FO":
+        loss =  lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, dst, n_classes, 1, cfg.model.output)
+        bound_coeff = 1.
+        kl_factor = 1.
+        div = 'KL'
+    elif cfg.training.risk == "SO":
+        loss =  lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, dst, n_classes, 2, cfg.model.output)
+        bound_coeff = 4.
+        kl_factor = 2.
+        div = 'KL'
+    elif cfg.training.risk == "Bin":
+        loss =  lambda x, y, z: bin_loss(x, y, z, cfg.model.pred, dst, n_classes, cfg.training.rand_n, cfg.model.output)
+        bound_coeff = 2.
+        kl_factor = cfg.training.rand_n
+        div = 'KL'
+    elif cfg.training.risk == "Dis_Renyi":
+        loss = lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, dst, n_classes, 1, cfg.model.output)
+        bound_coeff = 1.
+        kl_factor = 1.
+        div = 'Renyi'
+    elif cfg.training.risk == "Cbound":
+        loss = None
+        bound_coeff = None
+        kl_factor = None
+        div = None
+    else:
+        raise NotImplementedError
+    return loss, bound_coeff, kl_factor, div
 
 
 def true_loss(y_target, y_pred, theta, distribution, n_classes):

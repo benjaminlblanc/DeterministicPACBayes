@@ -3,15 +3,9 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 
-from core.utils import BetaInc, Phi
+from core.utils import Phi, I
 from tqdm import tqdm
 
-def I(l, u):
-    """
-    Computes the incomplete beta function.
-    """
-    c = torch.tensor(0.5)
-    return BetaInc.apply(l, u, c, torch.tensor(1))
 
 def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, b_surrogate, c_surrogate):
     """
@@ -123,12 +117,12 @@ def compute_bound(model, bound, n, trainloader, loss, sample):
     Pipeline for computing the deterministic bound.
     """
     if type(trainloader) == tuple:
-        train_data = trainloader[1], model(trainloader[0])
+        train_data = trainloader[1], trainloader[0]
         cur_PB_bound = bound(n, model, model.risk(train_data, loss), sample)
     elif type(trainloader) == DataLoader:
         cur_PB_bound = 0
         for _, batch in enumerate(trainloader):
-            train_data = batch[1], model(batch[0])
+            train_data = batch[1], batch[0]
             cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss), sample)
     elif type(trainloader[0]) == tuple:
         cur_PB_bound = bound(n, model, model.risk(trainloader, loss), sample)
@@ -139,8 +133,7 @@ def compute_bound(model, bound, n, trainloader, loss, sample):
             X = [batch[0] for batch in batches]
             # sum sizes of loaders
             n = sum(map(len, X))
-            pred = model(X)
-            data = [(batches[i][1], pred[i]) for i in range(len(batches))]
+            data = [(batches[i][1], X[i]) for i in range(len(batches))]
             cur_PB_bound += len(data[0][0]) * bound(n, model, model.risk(data, loss), sample)
             count += len(data[0][0])
         cur_PB_bound /= count

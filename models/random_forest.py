@@ -3,7 +3,7 @@ import torch
 from sklearn.ensemble import RandomForestClassifier
 
 
-def two_forests(M, r, X, y, samples_prop, max_depth, binary, output_type):
+def two_forests(M, X, y, samples_prop, max_depth, binary, output_type):
     """
     Create a collection of two random forests classifiers.
 
@@ -17,13 +17,15 @@ def two_forests(M, r, X, y, samples_prop, max_depth, binary, output_type):
     Returns both the forests in a tuple, and the total number of base classifiers (trees, 2 * M).
     """
     assert type(M) == int, f"M must be an integer, got {M}."
-    assert 0 <= r <= 1, f"r must be such that 0 <= r <= 1, got {r}."
     assert 0 <= samples_prop <= 1, f"samples_prop (cfg.model.samples_prop) must be in [0, 1], got {samples_prop}."
-    assert max_depth is None or type(max_depth) == int, f"cfg.model.max_depth must be int/None, got {max_depth}."
+    assert max_depth == "None" or type(max_depth) == int, f"cfg.model.max_depth must be int/None, got {max_depth}."
     assert output_type in ['proba', 'class'], f"output_type must be in ['proba', 'class'], got {output_type}."
 
-    # Number of example to train the first forest on.
-    m = int(len(X) * r)
+    if max_depth == "None":
+        max_depth = None
+
+    # Number of example to train the first forest on (by default: have the ).
+    m = int(len(X) * 0.5)
 
     # Learn one prior.
     trees1 = trained_random_forest(M, (X[:m], y[:m]), samples_prop=samples_prop, max_depth=max_depth)

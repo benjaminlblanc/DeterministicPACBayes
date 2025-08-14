@@ -3,7 +3,8 @@ from torch.distributions.dirichlet import Dirichlet as Dir
 from torch.distributions.multivariate_normal import MultivariateNormal as Gaus
 import torch.nn.functional as F
 from torch import lgamma, digamma
-from core.utils import value_to_one_hot
+
+from core.expected_risk import value_to_one_hot
 
 
 def log_Beta(vec):
@@ -57,7 +58,7 @@ class Categorical():
         return r.sum()
 
     def deterministic_risk(self, batch, mean=True):
-        centered = torch.prod(torch.tensor(self.theta ** 2 == self.theta))
+        centered = torch.prod(self.theta ** 2 == self.theta)
         theta = self.get_theta() if centered else self.theta
         y_target, y_pred = batch
         y_pred_oh = value_to_one_hot(y_pred, self.n_classes)

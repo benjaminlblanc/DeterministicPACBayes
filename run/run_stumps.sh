@@ -1,4 +1,4 @@
-name=DeterministicPACBayes
+name=DeterministicPACBayes3
 wandb=True
 prd=UniformStumps
 m=10

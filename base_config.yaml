@@ -1,32 +1,32 @@
-project_name: "DeterministicPACBayes"
-dataset: 'SVMGUIDE'
-num_trials: 10
+project_name: --
+dataset: --
+num_trials: --
 num_workers: 8
-is_using_wandb: False
+is_using_wandb: --
 
 model:
-  M: 10
-  prior: 0
-  pred: "UniformStumps"
-  stump_init: "rand"
+  M: --
+  prior: --
+  pred: --
+  stump_init: --
   samples_prop: 0.5
   max_tree_depth: None
-  posterior_std: 0.1
+  posterior_std: --
   output: class
 
 training:
-  seed: 541944
+  seed: --
   lr: 0.1
   batch_size: 1024
   num_epochs: 100
-  risk: "Dis_Renyi"
-  distribution: "gaussian"
-  rand_n: 0
+  risk: --
+  distribution: --
+  rand_n: --
   compute_disintegration: False
   normalize_data: True
 
 bound:
   delta: 0.05
   type: "seeger"
-  order: 1.5
-  n_grid: 5
+  order: --
+  n_grid: --

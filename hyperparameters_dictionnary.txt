@@ -12,7 +12,7 @@ model:
   prior (int or str): Choices between and int or 'adjusted', meaning 1/number of base classifiers.
   pred (str): Choices between UniformStumps, RandomForests, LinearClassifier.
   stump_init (str): Choices between 'ones' and 'rand'. Only for pred = UniformStumps.
-  samples_prop (float): Proportion of examples to train the first forest VS the other. Only for pred = RandomForests.
+  samples_prop (float): Proportion used for bootstrapping when learning the RandomForest. Only for pred = RandomForests.
   max_tree_depth (int): sklearn.ensemble.RandomForestClassifier arguments. Only for pred = RandomForests.
   posterior_std (float > 0): Standard deviation of the posterior initialization. Only for pred = LinearClassifier.
   output (str): Choices between 'class', 'proba', 'embedding'. 'class' is such that the base classifier prediction is a

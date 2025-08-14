@@ -79,14 +79,14 @@ def triple_bound(n, model, risks, delta, div, sample=False, coeff=1, order=None,
 
     if isinstance(model, MultipleMajorityVote):  # informed priors
 
-        consts = np.log(4 * (ns ** 2 / 4) ** 0.5 / delta)
+        consts = np.log(4 * (ns ** 2 / 4) ** 0.5 / (delta / 3))
         kl *= 2
 
     else:
         if div == 'Renyi':
-            consts = (2 * order - 1) / (order - 1) * np.log(2 / delta) + np.log(2 * ns ** 0.5)
+            consts = (2 * order - 1) / (order - 1) * np.log(2 / (delta / 3)) + np.log(2 * ns ** 0.5)
         else:
-            consts = np.log(2 * (ns ** 0.5) / delta)
+            consts = np.log(2 * (ns ** 0.5) / (delta / 3))
 
     if sample:
         bound_1 = coeff * klInvFunction.apply(risks[0], torch.max(kl + consts[0], torch.tensor(0)) / ns[0], "MAX")
