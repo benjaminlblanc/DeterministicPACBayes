@@ -33,6 +33,6 @@ training:
 
 bound:
   delta (float): Confidence parameter.
-  type (str): Bound to optimize. Choices between 'seeger', 'mcallester'.
+  type (str): Bound to optimize. Choices between 'seeger', 'triple'.
   order: Parameter of the Renyi divergence. Only for risk = 'Dis_Renyi'.
   n_grid: Number of order that are tested for the Renyi divergence. Only for risk = 'Dis_Renyi'.

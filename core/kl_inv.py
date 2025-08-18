@@ -1,11 +1,17 @@
 import torch
 
 def kl(q, p):
+    """
+    KL divergence between two bernoulli distributions
+    """
     return q * torch.log(q/p) + (1-q) * torch.log((1-q)/(1-p))
 
 def kl_inv(q, epsilon, mode, nb_iter_max=1000):
+    """
+    Computation of the inverse of the KL divergence between two bernoulli distributions. Possibility to yield the
+        minimum or the maximum value.
+    """
     # bisection optimization method
-    
     assert mode in ["MIN", "MAX"]
     assert epsilon >= 0, epsilon
     if 1 < q <= 1.01:
@@ -43,7 +49,9 @@ def kl_inv(q, epsilon, mode, nb_iter_max=1000):
 
 
 class klInvFunction(torch.autograd.Function):
-
+    """
+    Implementation of the inverse kl that allows auto-derivation.
+    """
     @staticmethod
     def forward(ctx, q, epsilon, mode="MAX"):
 

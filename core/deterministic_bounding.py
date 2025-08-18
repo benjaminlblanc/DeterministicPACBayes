@@ -7,36 +7,13 @@ from core.utils import Phi, I
 from tqdm import tqdm
 
 
-def deterministic_bound(Gibbs_risk, l, u, l_1_norm, leaf_values, distribution, b_surrogate, c_surrogate):
-    """
-    Computes Ben's bound, given Gibbs risk, u and l.
-    """
-    if distribution == "gaussian":
-        biggest_norm = get_bound_on_pred_norm(leaf_values, max)
-        smallest_norm = get_bound_on_pred_norm(leaf_values, min)
-        phi_l, phi_u = Phi(l / biggest_norm), Phi(u / smallest_norm)
-        b, c = phi_u, 1 - phi_l
-    elif distribution == "dirichlet":
-        I_l, I_u = I(u, l_1_norm - u), I(l_1_norm - l, l)
-        b, c = I_l, I_u
-    elif distribution == "categorical":
-        b, c = 1 - u, l
-    best_c = max(c, c_surrogate)
-    if best_c > Gibbs_risk:
-        best_b = max(b, b_surrogate)
-    else:
-        best_b = min(b, b_surrogate)
-    ben = (Gibbs_risk - b) / (c - b)
-    triple = (Gibbs_risk - b_surrogate) / (c_surrogate - b_surrogate)
-    ben_triple = (Gibbs_risk - best_b) / (best_c - best_b)
-    return ben, triple, ben_triple
-
 def get_indices(possible_values, sums):
     """
     Returns two vector of indices, associating the position of each element of possible_values
         in each vector sums[0] and sums[1].
+    Example: possible_values = [0, 2, 6, 1] and sums = [[1, 2], [0, 6]], returns [[3, 1], [0, 2]].
     """
-    tot, tot_1, tot_2 = [], [], []
+    tot_1, tot_2 = [], []
     for i in range(len(sums[0])):
         cur = np.argwhere(sums[0][i] == possible_values)
         tot_1.append(cur[0][0])
@@ -45,177 +22,188 @@ def get_indices(possible_values, sums):
         cur = np.argwhere(sums[1][i] == possible_values)
         tot_2.append(cur[0][0])
         possible_values[cur[0][0]] = -1
-    tot.append(tot_1)
-    tot.append(tot_2)
-    return tot
+    return [tot_1, tot_2]
 
-def get_normalized_l_u(leaf_values, normalized_tree_weights, leaf_type, distribution, multiclass=False):
+def get_b_c(possible_values, M, distribution, multiclass=False):
     """
     Returns the l and u values from the true-risk bound (see --).
     """
-    remainder = 0
-    if leaf_type == 'sign':
-        if distribution == 'dirichlet':
-            possible_values = torch.exp(normalized_tree_weights.clone().detach()).numpy()
-            if np.max(possible_values) == np.inf:
-                return 100, 100, 100
-        elif distribution == 'categorical':
-            possible_values = torch.nn.functional.softmax(normalized_tree_weights, dim=0).clone().detach().numpy()
-        elif distribution == 'gaussian':
-            possible_values = normalized_tree_weights.clone().detach().numpy()
-    else:
-        normalized_leaf_values = np.reshape(normalized_tree_weights, (-1, 1)) * leaf_values
-        possible_values = []
-        for i in range(len(normalized_leaf_values)):
-            possible_values.append((max(normalized_leaf_values[i])-min(normalized_leaf_values[i])) / 2)
-            remainder += (max(normalized_leaf_values[i])+min(normalized_leaf_values[i])) / 2
-        possible_values.append(remainder)
-    if np.max(possible_values) > np.sum(possible_values) - np.max(possible_values):
-        possible = possible_values.copy()
-        possible = np.delete(possible, np.argmax(possible_values))
-        sums = [[np.max(possible_values)], list(possible)]
-    else:
-        try:
-            sums = prtpy.partition(algorithm=prtpy.partitioning.ilp, numbins=2, items=np.sort(possible_values),
-                                   objective=prtpy.obj.MaximizeSmallestSum)
-        except ValueError:
-            sums = [[1], [1]]
-            possible_values = np.array([1, 1])
+    possible_values_np = possible_values.detach().numpy()
+    # The partition bound is not valid for the multiclass gaussian approach
     if distribution == "gaussian" and multiclass:
-        return torch.tensor(0), torch.tensor(10), None
-    indices = get_indices(possible_values.copy(), sums)
-    if distribution == "gaussian":
-        sum_1 = torch.sum(normalized_tree_weights[indices[0]])
-        sum_2 = torch.sum(normalized_tree_weights[indices[1]])
-        return torch.abs(sum_1 - sum_2), torch.sum(torch.abs(normalized_tree_weights)), None
-    elif distribution == "categorical":
-        sum_1 = torch.sum(torch.nn.functional.softmax(normalized_tree_weights, dim=0).clone().detach()[indices[0]])
-        sum_2 = torch.sum(torch.nn.functional.softmax(normalized_tree_weights, dim=0).clone().detach()[indices[1]])
-        biggest_sum = torch.max(sum_1, sum_2)
-        smallest_sum = torch.min(sum_1, sum_2)
-        return biggest_sum, biggest_sum + smallest_sum, None
+        return torch.tensor(0), torch.tensor(10)
+
+    try:
+        # This function computes the partitioning problem (2 bins)
+        sums = prtpy.partition(algorithm=prtpy.partitioning.ilp,
+                               items=np.sort(possible_values_np),
+                               objective=prtpy.obj.MaximizeSmallestSum,
+                               numbins=2)
+    except ValueError:
+        # In cases where the function do not converge to a solution, we avoid a crash by doing as follows
+        sums = [[1], [1]]
+        possible_values_np = np.array([1, 1])
+        possible_values = torch.tensor([1, 1])
+    # We gather the indices of the values in each bins given by the partitioning algorithm's solution
+    indices = get_indices(possible_values_np.copy(), sums)
+
+    sum_1 = torch.sum(possible_values[indices[0]])
+    sum_2 = torch.sum(possible_values[indices[1]])
+    biggest_sum = torch.max(sum_1, sum_2)
+    smallest_sum = torch.min(sum_1, sum_2)
+    if distribution == "categorical":
+        return 0, biggest_sum
     elif distribution == "dirichlet":
-        sum_1 = torch.sum(torch.exp(normalized_tree_weights[indices[0]]))
-        sum_2 = torch.sum(torch.exp(normalized_tree_weights[indices[1]]))
-        biggest_sum = torch.max(sum_1, sum_2)
-        smallest_sum = torch.min(sum_1, sum_2)
-        return biggest_sum, biggest_sum + smallest_sum, biggest_sum + smallest_sum
+        return I(biggest_sum + smallest_sum, torch.tensor(0)), I(smallest_sum, biggest_sum)
+    elif distribution == "gaussian":
+        return Phi(torch.sum(torch.abs(possible_values)) / M ** 0.5), 1 - Phi(biggest_sum / M ** 0.5)
 
-def get_bound_on_pred_norm(leaf_values, func):
+def compute_bound(model, bound, n, trainloader, loss, disintegrated):
     """
-    Returns the biggest (or smallest) predictions norm: max_x (min_x) ||f(x)||.
+    Pipeline for computing a bound.
     """
-    leaf_values = leaf_values ** 2
-    tot = 0
-    for i in range(len(leaf_values)):
-        tot += func(leaf_values[i])
-    return torch.tensor(tot ** 0.5)
-
-
-def compute_bound(model, bound, n, trainloader, loss, sample):
-    """
-    Pipeline for computing the deterministic bound.
-    """
-    if type(trainloader) == tuple:
-        train_data = trainloader[1], trainloader[0]
-        cur_PB_bound = bound(n, model, model.risk(train_data, loss), sample)
-    elif type(trainloader) == DataLoader:
+    if type(trainloader) == DataLoader: # pred in [StumpsUniform, LinearClassifier]
         cur_PB_bound = 0
         for _, batch in enumerate(trainloader):
             train_data = batch[1], batch[0]
-            cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss), sample)
-    elif type(trainloader[0]) == tuple:
-        cur_PB_bound = bound(n, model, model.risk(trainloader, loss), sample)
-    elif type(trainloader) == list:
+            cur_PB_bound += (len(batch[1]) / n) * bound(n, model, model.risk(train_data, loss), disintegrated)
+    elif type(trainloader) == list: # pred == RandomForests
         cur_PB_bound, count = 0, 0
         pbar = range(len(trainloader[0]))
         for i, *batches in zip(pbar, *trainloader):
             X = [batch[0] for batch in batches]
-            # sum sizes of loaders
             n = sum(map(len, X))
             data = [(batches[i][1], X[i]) for i in range(len(batches))]
-            cur_PB_bound += len(data[0][0]) * bound(n, model, model.risk(data, loss), sample)
+            cur_PB_bound += len(data[0][0]) * bound(n, model, model.risk(data, loss), disintegrated)
             count += len(data[0][0])
         cur_PB_bound /= count
+    else:
+        cur_PB_bound = bound(n, model, model.risk(trainloader, loss), disintegrated)
     return cur_PB_bound
 
-def compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name, cur_PB_bound=None, b_surrogate=0, c_surrogate=0.5, multiclass=False):
+def compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name, Gibbs_risk=None,
+                              b_triple=0, c_triple=0.5, multiclass=False):
     """
     Pipeline for computing the deterministic bound.
     """
-    leaves = np.ones((n_alphas, 2))
-    leaves[:, 0] = -1
-    l, u, l_1_norm = get_normalized_l_u(leaves, model.get_post(), 'sign', distribution_name, multiclass)
-    if cur_PB_bound is None:
-        cur_PB_bound = compute_bound(model, bound, n, trainloader, loss, False)
-    return deterministic_bound(cur_PB_bound, l, u, l_1_norm, leaves, distribution_name, b_surrogate, c_surrogate)
+    post = model.get_post()
+    b, c = get_b_c(post, M, distribution_name, multiclass)
 
-def crop_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name):
+    # If the bound on the Gibbs risk is not given, we have to compute it
+    if Gibbs_risk is None:
+        Gibbs_risk = compute_bound(model, bound, n, trainloader, loss, False)
+
+    # We compute the best b and c out of the one given by the partition bound and the one given by the triple bound
+    best_c = max(c, c_triple)
+    if best_c > Gibbs_risk:
+        best_b = max(b, b_triple)
+    else:
+        best_b = min(b, b_triple)
+
+    part = (Gibbs_risk - b) / (c - b)
+    triple = (Gibbs_risk - b_triple) / (c_triple - b_triple)
+    # Allowing for this arbitrary choice of b and c can lead to values being smaller than the Gibbs risk...
+    part_triple = max((Gibbs_risk - best_b) / (best_c - best_b), Gibbs_risk)
+    if type(part_triple) is not torch.tensor:
+        part_triple = torch.tensor(part_triple)
+    return part, triple, part_triple
+
+def clip_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name, b_surr, c_surr):
     """
-    Assigns small weights to predictors with medium weights, so that l and u might
-        respectively be big and small.
+    Assigns small weights to predictors with medium weights, so b and c are the smallest possible (partition bound).
     """
-    best_alphas = model.get_post()
-    sorted_alphas = torch.sort(torch.abs(best_alphas.clone()))[0]
-    n_alphas = len(best_alphas)
-    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)[2]
-    pbar = tqdm(range(12))
-    low, up, strikes = 0, (n_alphas-1) * 1.5, 0
-    print(f"Current true-risk bound: {best_bound}.")
-    for _ in pbar:
-        mean = int((up + low) / 2)
-        if up - low <= 1 or mean >= n_alphas:
-            break
-        post = model.get_post().clone()
-        post[torch.abs(best_alphas) <= sorted_alphas[mean]] = prior_coefficient
+    best_post = model.get_unchanged_post().clone()
+    sorted_post = torch.sort(torch.abs(best_post.clone()))[0]
+    post = model.get_unchanged_post().clone()
+    M = len(best_post)
+    best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
+                                           b_triple=b_surr, c_triple=c_surr)[2]
+    print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")
+    print("Clipping weak learners...")
+    pbar = tqdm(list(range(10, 100, 10)) + list(range(91, 100, 1)))
+    for i in pbar:
+        max_idx = int(M * i / 100) - 1
+        # We try several simplification of the posterior by clipping the smallest values to the prior values. Having
+        #   lesser small values help to obtain better partitioning bound.
+        post[torch.abs(best_post) <= sorted_post[max_idx]] = prior_coefficient
         model.set_post(post)
-        cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)[2]
+        cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
+                                              b_triple=b_surr, c_triple=c_surr)[2]
         if cur_bound < best_bound:
-            best_bound = cur_bound
-            best_alphas = model.get_post()
-            low = mean
-            print(f"Current ben bound: {best_bound}.")
-        else:
-            post = best_alphas
-            model.set_post(post)
-            if strikes < 3:
-                low = low + 2
-                strikes += 1
-            else:
-                up = mean
+            best_bound = cur_bound.clone()
+            best_post = post.clone()
+    model.set_post(best_post)
+    print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")
     return model
 
-def manual_model_finetune(model, n, bound, trainloader, loss, distribution_name):
+def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_name, b_surr, c_surr):
     """
-    Manually search for the best .
+    Manual coordinate descent.
     """
-    best_alphas = model.get_post()
-    n_alphas = len(best_alphas)
-    best_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)[2]
-    changed = True
-    while changed:
-        changed = False
-        rang, factor = [], torch.max(model.get_post()) / 100
-        for i in range(len(best_alphas)):
-            if best_alphas[i] >= factor:
+    print("Manual coordinate descent...")
+    best_post = model.get_unchanged_post().clone()
+    M = len(best_post)
+    best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
+                                           b_triple=b_surr, c_triple=c_surr)[2]
+    while True:
+        previous_best_bound = best_bound.clone()
+        rang, factor = [], torch.max(model.get_unchanged_post()) / 100
+        for i in range(len(best_post)):
+            if best_post[i] >= factor:
                 rang.append(i)
         np.random.shuffle(rang)
         pbar = tqdm(rang[:min(100, len(rang))])
-        print(f"Current ben bound: {best_bound}.")
         for i in pbar:
             for change in ['min', 'max']:
-                # We slightly modify the current weighting
-                post = model.get_post()
-                post[i] = post[i] + (change == 'max') * factor - (change == 'min') * factor + 0.01 + torch.rand(1) * 0.001
-                model.set_post(post)
-                # And compute the resulting bound.
-                cur_bound = compute_det_bound(model, bound, n, n_alphas, trainloader, loss, distribution_name)[2]
-                if cur_bound < best_bound - 1e-4:
-                    best_bound = cur_bound
-                    best_alphas = model.get_post()
-                    changed = True
-                else:
-                    post = model.get_post()
-                    post[i] = best_alphas[i]
+                post = model.get_unchanged_post().detach()
+                new_post_i = post[i] + factor * ((change == 'max') - (change == 'min'))
+                if torch.sign(post[i]) == torch.sign(new_post_i):
+                    # We slightly modify the current weighting
+                    post[i] = new_post_i
                     model.set_post(post)
+                    # And compute the resulting bound.
+                    cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
+                                                          b_triple=b_surr, c_triple=c_surr)[2]
+                    if cur_bound < best_bound:
+                        best_bound = cur_bound.clone()
+                        best_post = post.clone()
+                    else:
+                        post[i] = best_post[i]
+                        model.set_post(post)
+        if previous_best_bound < best_bound + 1e-3:
+            break
+    model.set_post(best_post.requires_grad_(True))
+    print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")
+    return model
+
+
+def weights_rescaling(model, n, bound, trainloader, loss, distribution_name, b_surr, c_surr):
+    """
+    We try several rescaling values for computing the optimal partition bound (the higher the rescaling factor, the
+    values for b and c are, but the worse is the KL penalty).
+    """
+    print("Weights rescaling...")
+    initial_post = model.get_unchanged_post().clone()
+    best_post = model.get_unchanged_post().clone()
+    M = len(best_post)
+    best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
+                                           b_triple=b_surr, c_triple=c_surr)[2]
+    low = 0
+    high = 10 if distribution_name in ['categorical', 'dirichlet'] else 1e2
+    pbar = tqdm(range(15))
+    for _ in pbar:
+        try:
+            mean = (low + high) / 2
+            post = initial_post * mean
+            model.set_post(post)
+            cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
+                                                  b_triple=b_surr, c_triple=c_surr)[2]
+            if cur_bound < best_bound:
+                best_bound = cur_bound.clone()
+                best_post = post.clone()
+        except AssertionError:
+            model.set_post(best_post)
+            high -= 1
+    model.set_post(best_post)
+    print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")
     return model

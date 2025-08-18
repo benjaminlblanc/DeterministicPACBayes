@@ -36,7 +36,7 @@ class MajorityVote(torch.nn.Module):
         self.voters = voters
         self.kl_factor = kl_factor
 
-    def voters_forward(self, x):
+    def forward(self, x):
         return self.voters(x)
 
     def risk(self, batch, loss=None, mean=True):
@@ -57,28 +57,23 @@ class MajorityVote(torch.nn.Module):
         return self.distribution.KL_disintegrated(self.prior)
 
     def get_post(self):
-        if self.distribution_name == "dirichlet":
-            return torch.exp(self.post)
-        return self.post
+        return self.distribution.get_post()
+
+    def get_unchanged_post(self):
+        return self.distribution.get_unchanged_post()
 
     def get_post_grad(self):
         return self.post.grad
 
     def set_post(self, value):
-
         assert len(value) == self.num_voters
+        self.post = torch.nn.Parameter(value, requires_grad=True)
          
         if self.distribution_name == "categorical": # make sure params sum to 1
-            self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.theta = self.post
-
         elif self.distribution_name == "dirichlet":
-            assert all(value > 0), "all posterior parameters must be positive"
-            self.post = torch.nn.Parameter(torch.log(value), requires_grad=True) # use log (and apply exp(post) later so that posterior parameters are always positive)
             self.distribution.alpha = self.post
-
         elif self.distribution_name == "gaussian":
-            self.post = torch.nn.Parameter(value, requires_grad=True)
             self.distribution.w = self.post
 
     def random_draw_new_post(self):
@@ -106,8 +101,8 @@ class MultipleMajorityVote(torch.nn.Module):
         self.weights = weights
         self.distribution_name = distr_name
 
-    def voters_forward(self, xs):
-        return [mv.voters_forward(x) for mv, x in zip(self.mvs, xs)]
+    def forward(self, xs):
+        return [mv.forward(x) for mv, x in zip(self.mvs, xs)]
 
     def risk(self, batchs, loss=None, mean=True):
         risks = []
@@ -126,6 +121,9 @@ class MultipleMajorityVote(torch.nn.Module):
 
     def get_post(self):
         return torch.cat([mv.get_post() for mv in self.mvs], 0)
+
+    def get_unchanged_post(self):
+        return torch.cat([mv.get_unchanged_post() for mv in self.mvs], 0)
 
     def get_post_grad(self):
         return torch.cat([mv.post.grad for mv in self.mvs], 0)

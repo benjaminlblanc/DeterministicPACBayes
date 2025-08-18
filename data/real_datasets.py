@@ -338,9 +338,6 @@ def create_CIFAR10_Inception_v3(path):
         nsamples_training = 50000    # at most 50000
         nsamples_testing  = 10000    # at most 10000
 
-        # nsamples_training = len(data_training)
-        # nsamples_testing  = len(data_testing)
-
         nsamples = nsamples_training + nsamples_testing
 
         X_data = [ data_training[i][0] for i in range(nsamples_training) ] + \
