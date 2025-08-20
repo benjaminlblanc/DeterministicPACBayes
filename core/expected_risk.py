@@ -1,24 +1,10 @@
 import math
 
 import torch
-import numpy as np
+from torch import lgamma, log1p, exp, log
 
 from scipy.stats import multivariate_normal
 from betaincder import betainc, betaincderp, betaincderq
-from torch import lgamma, log1p, exp, log
-
-
-def value_to_one_hot(values, n_classes):
-    """
-    Encodes a prediction array m x n into an m x n x n_classes one-hot matrix.
-    """
-    m = len(values)
-    n = len(values[0])
-    array = np.zeros((m, n, n_classes))
-    for i in range(m):
-        for j in range(n):
-            array[i, j, int(values[i, j])] = 1
-    return torch.tensor(array, dtype=torch.float)
 
 
 def betaincderx(x, a, b):

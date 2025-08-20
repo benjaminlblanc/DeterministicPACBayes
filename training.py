@@ -244,7 +244,6 @@ def main(cfg):
         test_errors.append(seed_results["test-error"])
         bounds.append(seed_results["deterministic_bound"])
         times.append(seed_results["time"])
-    1/0
 
     results = {"train-error": (np.mean(train_errors), np.std(train_errors)),
                "test-error": (np.mean(test_errors), np.std(test_errors)),

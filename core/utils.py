@@ -38,7 +38,7 @@ def whether_to_run_run(cfg):
         assert cfg.model.output in ['class', 'proba'], "RandomForests implies class or proba"
         assert cfg.dataset in ['MNIST', 'PENDIGITS', 'PROTEIN', 'SENSORLESS', 'SHUTTLE', 'FASHION']
 
-    assert cfg.training.risk in ['Tr', 'FO', 'SO', 'Bin', 'Dis_Renyi']
+    assert cfg.training.risk in ['Tr', 'FO', 'SO', 'Bin', 'Dis_Renyi', 'Cbound']
     if cfg.training.risk == "Tr":
         assert cfg.bound.type == "triple"
     if cfg.training.risk == "Bin":

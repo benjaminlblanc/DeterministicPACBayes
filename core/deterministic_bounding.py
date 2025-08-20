@@ -104,7 +104,7 @@ def compute_part_triple_bound(model, bound, n, M, trainloader, loss, distributio
     triple = (Gibbs_risk - b_triple) / (c_triple - b_triple)
     # Allowing for this arbitrary choice of b and c can lead to values being smaller than the Gibbs risk...
     part_triple = max((Gibbs_risk - best_b) / (best_c - best_b), Gibbs_risk)
-    if type(part_triple) is not torch.tensor:
+    if not torch.is_tensor(part_triple):
         part_triple = torch.tensor(part_triple)
     return part, triple, part_triple
 
