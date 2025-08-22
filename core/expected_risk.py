@@ -145,7 +145,8 @@ def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred
                     if n_classes == 2:
                         y_pred = (y_pred + 1) / 2
                         y_target = (y_target + 1) / 2
-                    one_hot_y_pred = torch.nn.functional.one_hot(y_pred[y_target_is_i].to(torch.long), n_classes)
+                    one_hot_y_pred = torch.nn.functional.one_hot(y_pred[y_target_is_i].to(torch.long),
+                                                                 n_classes).to(torch.float)
                 else:
                     one_hot_y_pred = y_pred[y_target_is_i]
                 # Precomputation that serves in both the mu and the Sigma computation (once again, see paper).
@@ -199,12 +200,8 @@ class MultinormalCDF(torch.autograd.Function):
     def backward(ctx, grad):
         purged_mu, purged_Sigma, output_type = ctx.saved_tensors
         # We estimate the gradient by omitting the covariance terms (see paper).
-        if output_type == 0:
-            truncated_expectation = -torch.sqrt(torch.diagonal(purged_Sigma) / (2 * math.pi)) * torch.exp(
+        truncated_expectation = -torch.sqrt(torch.diagonal(purged_Sigma) / (2 * math.pi)) * torch.exp(
                 -1 / 2 * torch.matmul(torch.matmul(purged_mu.reshape(1, -1), torch.inverse(purged_Sigma)), purged_mu))
-        else:
-            truncated_expectation = -torch.sqrt(torch.diagonal(purged_Sigma) / (2 * math.pi)) * torch.exp(
-                -1 / 2 * purged_mu ** 2 / purged_Sigma)
         return grad * torch.matmul(torch.inverse(purged_Sigma), truncated_expectation), torch.tensor(0), torch.tensor(0)
 
 
@@ -216,9 +213,8 @@ class NormalCDF(torch.autograd.Function):
     def forward(ctx, mu, Sigma):
         ctx.save_for_backward(mu, Sigma)
         # We estimate the CDF of the multi gaussian distribution by the product of the marginal distributions.
-        return torch.prod(
-            1 / 2 * (1 - erf_approximation(mu / (torch.sqrt(2 * (2 * Sigma.unsqueeze(1).repeat(1, mu.shape[1])))))),
-            dim=1)
+        Sigma_ref = Sigma.unsqueeze(1).repeat(1, mu.shape[1])
+        return torch.prod(1 / 2 * (1 - erf_approximation(mu / (torch.sqrt(2 * (2 * Sigma_ref))))), dim=1)
 
     @staticmethod
     def backward(ctx, grad):

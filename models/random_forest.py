@@ -24,7 +24,7 @@ def two_forests(M, X, y, samples_prop, max_depth, binary, output_type):
     if max_depth == "None":
         max_depth = None
 
-    # Number of example to train the first forest on (by default: have the ).
+    # Number of example to train the first forest on (default: have both forests to train on the same amount of data).
     m = int(len(X) * 0.5)
 
     # Learn one prior.
@@ -48,7 +48,7 @@ def trained_random_forest(M, data, samples_prop=1., max_depth=None):
         bootstrap = False
         samples_prop = None
 
-    forest = RandomForestClassifier(n_estimators=M, criterion="gini", max_depth=max_depth, bootstrap=bootstrap,
+    forest = RandomForestClassifier(n_estimators=M, criterion="gini", max_depth=8, bootstrap=bootstrap,
                                     max_samples=samples_prop, n_jobs=-1, class_weight='balanced_subsample')
     forest.fit(*data)
 

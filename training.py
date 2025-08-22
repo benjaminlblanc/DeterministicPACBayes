@@ -38,7 +38,7 @@ def main(cfg):
     # We iterate for as many trials as required, incrementing the random seed by 1 for each one.
     for i in range(cfg.num_trials):
         current_seed = cfg.training.seed + i
-        print("Current seed: ", current_seed, ".")
+        print(f"Current seed: {current_seed}.")
 
         # Each package has its random seed set according to the current seed.
         deterministic(current_seed)
