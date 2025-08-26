@@ -8,7 +8,7 @@ model:
   M: --
   prior: --
   pred: --
-  stump_init: --
+  stump_init: ones
   samples_prop: 0.5
   max_tree_depth: None
   posterior_std: --
