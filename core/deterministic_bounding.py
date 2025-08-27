@@ -102,6 +102,7 @@ def compute_part_triple_bound(model, bound, n, M, trainloader, loss, distributio
 
     part = (Gibbs_risk - b) / (c - b)
     triple = (Gibbs_risk - b_triple) / (c_triple - b_triple)
+
     # Allowing for this arbitrary choice of b and c can lead to values being smaller than the Gibbs risk...
     part_triple = max((Gibbs_risk - best_b) / (best_c - best_b), Gibbs_risk)
     if not torch.is_tensor(part_triple):
@@ -170,7 +171,7 @@ def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_n
                     else:
                         post[i] = best_post[i]
                         model.set_post(post)
-        if previous_best_bound < best_bound + 1e-3:
+        if previous_best_bound < best_bound + 1e-2:
             break
     model.set_post(best_post.requires_grad_(True))
     print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")

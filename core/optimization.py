@@ -146,7 +146,6 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss
     best_obj = float("inf")
     best_model = deepcopy(model)
     no_improv = 0
-    best_train_stats = {bound_type: None}
 
     if pred_type == 'RandomForests':
         train_routine, val_routine, test_routine = train_stochastic_multiset, evaluate_multiset, evaluate_multiset
@@ -170,7 +169,6 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss
         # If there are improvements, we update the best model
         if train_stats[metric_to_optimize] < best_obj:
             best_obj = train_stats[metric_to_optimize]
-            best_train_stats = train_stats
             best_model = deepcopy(model)
             no_improv = 0
         if lr_scheduler:
@@ -180,22 +178,21 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss
             break
     t2 = time()
 
-    val_routine(trainloader, model, loss=loss)
     test_error = test_routine(testloader, best_model)
     string = f"Test error: {round(test_error['error'], 4)}"
     if metric_to_optimize == "error":
-        train_error = best_train_stats["error"]
+        train_error = best_obj
         final_bound = {'bound': 1}
         string += "\n"
     else:
         train_error = val_routine(trainloader, best_model)
         final_bound = {'bound': round(best_obj, 4)}
-        string += f"; {bound_type} bound: {round(best_train_stats[bound_type], 4)}"
+        string += f"; {bound_type} bound: {round(best_obj, 4)}"
 
     if risk_type == "FO":
-        triple_bnd = compute_bound(model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, pred_type, distribution_name, n_classes, output_type), False)
-        M = torch.prod(torch.tensor(model.get_unchanged_post().shape))
-        partition_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name)[2]
+        triple_bnd = compute_bound(best_model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, pred_type, distribution_name, n_classes, output_type), False)
+        M = torch.prod(torch.tensor(best_model.get_unchanged_post().shape))
+        partition_bound = compute_part_triple_bound(best_model, bound, n, M, trainloader, loss, distribution_name, Gibbs_risk=final_bound['bound'])[2]
         string += f"; partition bound: {round(partition_bound.item(), 4)}\n"
     else:
         triple_bnd = (None, None)

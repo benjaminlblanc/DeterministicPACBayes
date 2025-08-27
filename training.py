@@ -168,7 +168,6 @@ def main(cfg):
                 seed_results["train-error"] = tr_err
                 seed_results["test-error"] = te_err
                 seed_results["time"] = time
-                final_bound = {'bound': cbound}
             else:
                 # First training phase
                 model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = \
