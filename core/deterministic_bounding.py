@@ -100,13 +100,15 @@ def compute_part_triple_bound(model, bound, n, M, trainloader, loss, distributio
     part = (Gibbs_risk - b) / (c - b)
     # Triple bound yields weird results if Gibbs_risk < b_triple, c_triple < b_triple, or
     #   c_triple - b_triple << Gibbs_risk - b_triple.
-    triple = torch.clamp((Gibbs_risk - b_triple) / (c_triple - b_triple), 0, 2)
-
+    triple = (Gibbs_risk - b_triple) / (c_triple - b_triple)
     # Allowing for this arbitrary choice of b and c can lead to values being smaller than the Gibbs risk...
-    part_triple = torch.clamp(max((Gibbs_risk - best_b) / (best_c - best_b), Gibbs_risk), 0, 2)
+    part_triple = max((Gibbs_risk - best_b) / (best_c - best_b), Gibbs_risk)
+
+    if not torch.is_tensor(triple):
+        triple = torch.tensor(triple)
     if not torch.is_tensor(part_triple):
         part_triple = torch.tensor(part_triple)
-    return part, triple, part_triple
+    return part, torch.clamp(triple, 0, 2), torch.clamp(part_triple, 0, 2)
 
 def clip_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name, b_surr, c_surr):
     """

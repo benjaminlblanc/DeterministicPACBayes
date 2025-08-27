@@ -99,8 +99,7 @@ def moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, ord
         elif distribution == 'dirichlet':
             correct = torch.where(y_target == y_pred, theta, torch.zeros(1)).sum(1)
             wrong = torch.where(y_target != y_pred, theta, torch.zeros(1)).sum(1)
-            return torch.tensor([BetaInc.apply(c, w, torch.tensor(0.5), torch.tensor(order)) \
-                                 for c, w in zip(correct, wrong)])
+            return [BetaInc.apply(c, w, torch.tensor(0.5), torch.tensor(order)) for c, w in zip(correct, wrong)]
         elif distribution == 'gaussian':
             if n_classes == 2:
                 inner_Phi = (torch.squeeze(y_target) * torch.sum(torch.reshape(theta,(1, -1)) * y_pred, dim=1)) /\
