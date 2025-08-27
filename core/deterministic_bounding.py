@@ -95,16 +95,15 @@ def compute_part_triple_bound(model, bound, n, M, trainloader, loss, distributio
 
     # We compute the best b and c out of the one given by the partition bound and the one given by the triple bound
     best_c = max(c, c_triple)
-    if best_c > Gibbs_risk:
-        best_b = max(b, b_triple)
-    else:
-        best_b = min(b, b_triple)
+    best_b = max(b, b_triple)
 
     part = (Gibbs_risk - b) / (c - b)
-    triple = (Gibbs_risk - b_triple) / (c_triple - b_triple)
+    # Triple bound yields weird results if Gibbs_risk < b_triple, c_triple < b_triple, or
+    #   c_triple - b_triple << Gibbs_risk - b_triple.
+    triple = torch.clamp((Gibbs_risk - b_triple) / (c_triple - b_triple), 0, 2)
 
     # Allowing for this arbitrary choice of b and c can lead to values being smaller than the Gibbs risk...
-    part_triple = max((Gibbs_risk - best_b) / (best_c - best_b), Gibbs_risk)
+    part_triple = torch.clamp(max((Gibbs_risk - best_b) / (best_c - best_b), Gibbs_risk), 0, 2)
     if not torch.is_tensor(part_triple):
         part_triple = torch.tensor(part_triple)
     return part, triple, part_triple
