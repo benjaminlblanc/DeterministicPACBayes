@@ -159,10 +159,9 @@ def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred
                                                                                                 mu, Sigma)
                 # Each example yield a particular mu and Sigma; each of them must be treated independently.
                 for j in range(len(mu)):
-                    cdfs.append(1 - MultinormalCDF.apply(purged_mu[j], purged_Sigma[j],
-                                                         torch.tensor(output_type == 'proba')) ** order.item())
+                    cdfs.append(1 - MultinormalCDF.apply(purged_mu[j], purged_Sigma[j]) ** order.item())
             elif pred_type == "LinearClassifier":
-                # For the LinearClassifer, the resulting Sigma is such that we omit the covariance terms; the resulting
+                # For the LinearClassifier, the resulting Sigma is such that we omit the covariance terms; the resulting
                 #   multivariate gaussian has a CDF that can be computed as the product of each marginal CDF. This
                 #   facilitates the computation and permits multiple computations (examples to be treated) at once.
                 mus.append(create_nn_mu(theta, y_pred[y_target_is_i], i))
@@ -190,19 +189,19 @@ class MultinormalCDF(torch.autograd.Function):
     Cumulative distribution function of the multivariate normal distribution; its forward and backward passes.
     """
     @staticmethod
-    def forward(ctx, purged_mu, purged_Sigma, output_type):
-        ctx.save_for_backward(purged_mu, purged_Sigma, output_type)
+    def forward(ctx, purged_mu, purged_Sigma):
+        ctx.save_for_backward(purged_mu, purged_Sigma)
         return torch.tensor(
             multivariate_normal.cdf(torch.zeros(len(purged_mu)), purged_mu, purged_Sigma, abseps=1e-2, releps=1e-2),
             dtype=torch.float32)
 
     @staticmethod
     def backward(ctx, grad):
-        purged_mu, purged_Sigma, output_type = ctx.saved_tensors
+        purged_mu, purged_Sigma = ctx.saved_tensors
         # We estimate the gradient by omitting the covariance terms (see paper).
         truncated_expectation = -torch.sqrt(torch.diagonal(purged_Sigma) / (2 * math.pi)) * torch.exp(
                 -1 / 2 * torch.matmul(torch.matmul(purged_mu.reshape(1, -1), torch.inverse(purged_Sigma)), purged_mu))
-        return grad * torch.matmul(torch.inverse(purged_Sigma), truncated_expectation), torch.tensor(0), torch.tensor(0)
+        return grad * torch.matmul(torch.inverse(purged_Sigma), truncated_expectation), torch.tensor(0)
 
 
 class NormalCDF(torch.autograd.Function):

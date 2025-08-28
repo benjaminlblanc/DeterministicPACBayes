@@ -195,7 +195,7 @@ def main(cfg):
                     if cfg.training.distribution == "gaussian" and multiclass:
                         # The partition bound does not concern the multiclass gaussian approach
                         part_bnd_tnd = part_bnd
-                        triple_bnd_tnd = triple_bound
+                        triple_bnd_tnd = triple_bnd
                         part_triple_bnd_tnd = part_triple_bnd
                     else:
                         # Cropping the weight of base predictors that barely have an effect on the prediction

@@ -67,7 +67,7 @@ def triple_loss(y_target, y_pred, theta, predictor, distribution, n_classes, out
     """
     Computes the average loss, the average loss when an error is made, and the average loss when no error is made.
     """
-    first_loss = moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, order=1, output_type=output_type)
+    first_loss = moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, 1, output_type)
     if not torch.is_tensor(first_loss):
         first_loss = torch.tensor(first_loss)
     second_loss = torch.where(first_loss >= 0.5, first_loss, torch.zeros(1))
