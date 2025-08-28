@@ -16,6 +16,7 @@ def csv_to_latex(file_name, hyperparameters, numerical_results, metrics, last_di
                        " the correct name.")
     det_.close()
     initial_df = pd.DataFrame(det[1:], columns=det[0])
+    initial_df.replace('', 1, inplace=True)
 
     # We transform the numerical entities to floats from strings
     for numerical in numerical_results + metrics:
@@ -69,59 +70,60 @@ def csv_to_latex(file_name, hyperparameters, numerical_results, metrics, last_di
         final_results[f"{i}"] = np.array(df_best_with_info)
 
     # Finally, we generate the latex table
-    generate_latex_table(final_results)
+    for pred_name in np.unique(final_results['0'][:, 0]):
+        n_datasets = len(np.unique(final_results['0'][final_results['0'][:, 0] == pred_name, 1]))
+        generate_latex_table(final_results, pred_name, n_datasets)
 
-def generate_latex_table(final_results):
+def generate_latex_table(final_results, pred_name, n_datasets):
+    first = "\multirow{"+str(n_datasets)+"}{*}{"+pred_name+"}"
     last_dataset = ''
-    Ben, FO, SO, Bin, Dis_Renyi, Dis_KL = '', '', '', '', '', ''
-    Ben_err, FO_err, SO_err, Bin_err, Dis_Renyi_err, Dis_KL_err = '', '', '', '', '', ''
-    Ben_std, FO_std, SO_std, Bin_std, Dis_Renyi_std, Dis_KL_std = '', '', '', '', '', ''
-    Ben_err_std, FO_err_std, SO_err_std, Bin_err_std, Dis_Renyi_err_std, Dis_KL_err_std = '', '', '', '', '', ''
+    Ben, FO, SO, Bin, CBound = '', '', '', '', ''
+    Ben_err, FO_err, SO_err, Bin_err, CBound_err = '', '', '', '', ''
+    Ben_std, FO_std, SO_std, Bin_std, CBound_std = '', '', '', '', ''
+    Ben_err_std, FO_err_std, SO_err_std, Bin_err_std, CBound_err_std = '', '', '', '', ''
     for i in range(len(final_results["0"])):
-        if final_results["0"][i][0] != last_dataset and last_dataset != '':
-            print(f"{last_dataset} & {FO} $\pm$ {FO_std} & {FO_err} $\pm$ {FO_err_std} & {SO} $\pm$ {SO_std} & {SO_err} $\pm$ {SO_err_std} & {Bin} $\pm$ {Bin_std} & {Bin_err} $\pm$ {Bin_err_std} & {Dis_Renyi} $\pm$ {Dis_Renyi_std} & {Dis_Renyi_err} $\pm$ {Dis_Renyi_err_std} & {Dis_KL} $\pm$ {Dis_KL_std} & {Dis_KL_err} $\pm$ {Dis_KL_err_std} & {Ben} $\pm$ {Ben_std} & {Ben_err} $\pm$ {Ben_err_std} \\\ ")
-            Ben, FO, SO, Bin, Dis_Renyi, Dis_KL = '', '', '', '', '', ''
-            Ben_err, FO_err, SO_err, Bin_err, Dis_Renyi_err, Dis_KL_err = '', '', '', '', '', ''
-            Ben_std, FO_std, SO_std, Bin_std, Dis_Renyi_std, Dis_KL_std = '', '', '', '', '', ''
-            Ben_err_std, FO_err_std, SO_err_std, Bin_err_std, Dis_Renyi_err_std, Dis_KL_err_std = '', '', '', '', '', ''
-        last_dataset = final_results["0"][i][0]
-        if final_results["0"][i][1] == 'FO':
-            FO = np.round(final_results["1"][i][2] * 100, 1)
-            FO_std = np.round(final_results["1"][i][8] * 100, 1)
-            FO_err = np.round(final_results["1"][i][4] * 100, 1)
-            FO_err_std = np.round(final_results["1"][i][10] * 100, 1)
-            Ben = np.round(final_results["0"][i][2] * 100, 1)
-            Ben_std = np.round(final_results["0"][i][8] * 100, 1)
-            Ben_err = np.round(final_results["0"][i][4] * 100, 1)
-            Ben_err_std = np.round(final_results["0"][i][10] * 100, 1)
-            Dis_KL = np.round(final_results["2"][i][2] * 100, 1)
-            Dis_KL_std = np.round(final_results["2"][i][3] * 100, 1)
-            Dis_KL_err = np.round(final_results["2"][i][6] * 100, 1)
-            Dis_KL_err_std = np.round(final_results["2"][i][7] * 100, 1)
-        elif final_results["0"][i][1] == 'SO':
-            SO = np.round(final_results["1"][i][2] * 100, 1)
-            SO_std = np.round(final_results["1"][i][8] * 100, 1)
-            SO_err = np.round(final_results["1"][i][4] * 100, 1)
-            SO_err_std = np.round(final_results["1"][i][10] * 100, 1)
-        elif final_results["1"][i][1] == 'Bin':
-            Bin = np.round(final_results["1"][i][2] * 100, 1)
-            Bin_std = np.round(final_results["1"][i][8] * 100, 1)
-            Bin_err = np.round(final_results["1"][i][4] * 100, 1)
-            Bin_err_std = np.round(final_results["1"][i][10] * 100, 1)
-        elif final_results["1"][i][1] == 'Dis_Renyi':
-            Dis_Renyi = np.round(final_results["2"][i][2] * 100, 1)
-            Dis_Renyi_std = np.round(final_results["2"][i][3] * 100, 1)
-            Dis_Renyi_err = np.round(final_results["2"][i][6] * 100, 1)
-            Dis_Renyi_err_std = np.round(final_results["2"][i][7] * 100, 1)
-    print(f"{last_dataset} & {FO} $\pm$ {FO_std} & {FO_err} $\pm$ {FO_err_std} & {SO} $\pm$ {SO_std} & {SO_err} $\pm$ {SO_err_std} & {Bin} $\pm$ {Bin_std} & {Bin_err} $\pm$ {Bin_err_std} & {Dis_Renyi} $\pm$ {Dis_Renyi_std} & {Dis_Renyi_err} $\pm$ {Dis_Renyi_err_std} & {Dis_KL} $\pm$ {Dis_KL_std} & {Dis_KL_err} $\pm$ {Dis_KL_err_std} & {Ben} $\pm$ {Ben_std} & {Ben_err} $\pm$ {Ben_err_std} \\\ ")
+        if final_results["0"][i][0] == pred_name:
+            if final_results["0"][i][1] != last_dataset and last_dataset != '':
+                print(f"{first} & {last_dataset} & {FO} $\pm$ {FO_std} & {FO_err} $\pm$ {FO_err_std} & {SO} $\pm$ {SO_std} & {SO_err} $\pm$ {SO_err_std} & {Bin} $\pm$ {Bin_std} & {Bin_err} $\pm$ {Bin_err_std} & {CBound} $\pm$ {CBound_std} & {CBound_err} $\pm$ {CBound_err_std} & {Ben} $\pm$ {Ben_std} & {Ben_err} $\pm$ {Ben_err_std} \\\ ")
+                first = ''
+                Ben, FO, SO, Bin, CBound = '', '', '', '', ''
+                Ben_err, FO_err, SO_err, Bin_err, CBound_err = '', '', '', '', ''
+                Ben_std, FO_std, SO_std, Bin_std, CBound_std = '', '', '', '', ''
+                Ben_err_std, FO_err_std, SO_err_std, Bin_err_std, CBound_err_std = '', '', '', '', ''
+            last_dataset = final_results["0"][i][1]
+            if final_results["0"][i][2] == 'FO':
+                FO = np.round(final_results["1"][i][3] * 100, 1)
+                FO_err = np.round(final_results["1"][i][4] * 100, 1)
+                FO_std = np.round(final_results["1"][i][6] * 100, 1)
+                FO_err_std = np.round(final_results["1"][i][7] * 100, 1)
+                Ben = np.round(final_results["0"][i][3] * 100, 1)
+                Ben_err = np.round(final_results["0"][i][4] * 100, 1)
+                Ben_std = np.round(final_results["0"][i][6] * 100, 1)
+                Ben_err_std = np.round(final_results["0"][i][7] * 100, 1)
+            elif final_results["0"][i][2] == 'SO':
+                SO = np.round(final_results["1"][i][3] * 100, 1)
+                SO_err = np.round(final_results["1"][i][4] * 100, 1)
+                SO_std = np.round(final_results["1"][i][6] * 100, 1)
+                SO_err_std = np.round(final_results["1"][i][7] * 100, 1)
+            elif final_results["1"][i][2] == 'Bin':
+                Bin = np.round(final_results["1"][i][3] * 100, 1)
+                Bin_err = np.round(final_results["1"][i][4] * 100, 1)
+                Bin_std = np.round(final_results["1"][i][6] * 100, 1)
+                Bin_err_std = np.round(final_results["1"][i][7] * 100, 1)
+            elif final_results["1"][i][2] == 'Cbound':
+                CBound = np.round(final_results["1"][i][3] * 100, 1)
+                CBound_err = np.round(final_results["1"][i][5] * 100, 1)
+                CBound_std = np.round(final_results["1"][i][6] * 100, 1)
+                CBound_err_std = np.round(final_results["1"][i][8] * 100, 1)
+    print(f" & {last_dataset} & {FO} $\pm$ {FO_std} & {FO_err} $\pm$ {FO_err_std} & {SO} $\pm$ {SO_std} & {SO_err} $\pm$ {SO_err_std} & {Bin} $\pm$ {Bin_std} & {Bin_err} $\pm$ {Bin_err_std} & {CBound} $\pm$ {CBound_std} & {CBound_err} $\pm$ {CBound_err_std} & {Ben} $\pm$ {Ben_std} & {Ben_err} $\pm$ {Ben_err_std} \\\ ")
+    print("\hline")
 
-file = 'wandb_export_2025-07-18T21_28_46.996-04_00.csv'
-hyperparams = ['M', 'batch_size', 'bootstrap', 'dataset', 'delta', 'distribution', 'is_using_wandb', 'lr',
-               'num_epochs', 'num_trials', 'num_workers', 'order', 'pred', 'prior', 'project_name', 'rand_n',
-               'risk', 'stochastic', 'stump_init', 'type', 'uniform']
-num_results = ['deterministic_bound_sampled_std', 'test-error', 'test-error_finetune', 'test-error_sampled', 'test-error_sampled_std']  # Do not change that order
-metric = ['ben_triple_bound_with_finetune', 'deterministic_bound', 'deterministic_bound_sampled']
-final_distinction = ['dataset', 'risk']   # Do not change that order
+file = 'wandb_export_2025-08-28T15_41_35.960-04_00.csv'
+hyperparams = ['M', 'batch_size', 'dataset', 'delta', 'distribution', 'is_using_wandb', 'lr', 'num_epochs',
+               'num_trials', 'num_workers', 'order', 'pred', 'prior', 'project_name', 'rand_n', 'risk', 'stump_init']
+num_results = ['test-error_finetune', 'test-error']  # Do not change that order
+metric = ['triple_bnd_tnd', 'deterministic_bound']
+final_distinction = ['pred', 'dataset', 'risk']   # Do not change that order
 csv_to_latex(file_name=file,
              hyperparameters=hyperparams,
              numerical_results=num_results,
