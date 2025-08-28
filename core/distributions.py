@@ -123,7 +123,7 @@ class Dirichlet:
         return res
 
     def deterministic_risk(self, batch, mean):
-        centered = torch.prod(self.alpha > 0)
+        centered = torch.prod(self.alpha > 0) and torch.sum(self.alpha) == 1
         alphas = self.alpha if centered else self.get_post()
 
         # Risk of the classifier centered on the mean of the distribution
