@@ -31,7 +31,7 @@ def get_b_c(possible_values, M, distribution, multiclass=False):
     possible_values_np = possible_values.detach().numpy()
     # The partition bound is not valid for the multiclass gaussian approach
     if distribution == "gaussian" and multiclass:
-        return torch.tensor(0), torch.tensor(10)
+        return torch.tensor(0), torch.tensor(0.5)
 
     try:
         # This function computes the partitioning problem (2 bins)
