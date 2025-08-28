@@ -13,9 +13,9 @@ from data.datasets import Dataset, TorchDataset
 from models.majority_vote import MultipleMajorityVote, MajorityVote
 from models.pretrainedDNN import LinearMultiClassifier
 
-from core.losses import initialize_risk
+from core.losses import initialize_risk, triple_loss
 from core.deterministic_bounding import clip_weak_learners, compute_part_triple_bound, manual_coordinate_descent, \
-    weights_rescaling
+    weights_rescaling, compute_bound
 from core.wandb_formatting import create_config_dico, create_run_name
 from core.bounds import BOUNDS
 from core.monitors import MonitorMV
@@ -179,6 +179,8 @@ def main(cfg):
                 #   The proposed bounds are optimized with risk = FO, since the objective function is similar to that
                 #   of the factor-2 bound.
                 if cfg.training.risk == "FO":
+                    triple_test_loss = lambda x, y, z: triple_loss(x, y, z, cfg.model.pred, distribution_name,
+                                                                   n_classes, cfg.model.output)
                     part_bnd, triple_bnd, part_triple_bnd = \
                         compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
                                                   final_bound['bound'], b_surrogate, c_surrogate, multiclass)
@@ -199,12 +201,20 @@ def main(cfg):
                         # Cropping the weight of base predictors that barely have an effect on the prediction
                         model = clip_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name,
                                                    b_surrogate, c_surrogate)
+                        b_surrogate, c_surrogate = compute_bound(model, triple_bound, n, trainloader,
+                                                                 triple_test_loss, False)
+
                         # Manual coordinate descent on the weights
                         model = manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_name,
                                                           b_surrogate, c_surrogate)
+                        b_surrogate, c_surrogate = compute_bound(model, triple_bound, n, trainloader,
+                                                                 triple_test_loss, False)
+
                         # Finally: we try finding the optimal weight scaling for the partition bound.
                         model = weights_rescaling(model, n, bound, trainloader, loss, distribution_name,
                                                   b_surrogate, c_surrogate)
+                        b_surrogate, c_surrogate = compute_bound(model, triple_bound, n, trainloader,
+                                                                    triple_test_loss, False)
 
                         # We need to recompute the train error, test error, and the bounds
                         part_bnd_tnd, triple_bnd_tnd, part_triple_bnd_tnd = \
