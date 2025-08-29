@@ -159,7 +159,7 @@ def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred
                                                                                                 mu, Sigma)
                 # Each example yield a particular mu and Sigma; each of them must be treated independently.
                 for j in range(len(mu)):
-                    cdfs.append(1 - MultinormalCDF.apply(purged_mu[j], purged_Sigma[j]) ** order.item())
+                    cdfs.append((1 - MultinormalCDF.apply(purged_mu[j], purged_Sigma[j])) ** order.item())
             elif pred_type == "LinearClassifier":
                 # For the LinearClassifier, the resulting Sigma is such that we omit the covariance terms; the resulting
                 #   multivariate gaussian has a CDF that can be computed as the product of each marginal CDF. This
@@ -169,7 +169,7 @@ def gaussian_cdf_precomputations(y_pred, y_target, theta, n_classes, order, pred
     if pred_type == "LinearClassifier":
         mu = torch.vstack(mus)
         Sigma = torch.hstack(Sigmas)
-        cdfs += 1 - NormalCDF.apply(mu, Sigma) ** order.item()
+        cdfs += (1 - NormalCDF.apply(mu, Sigma)) ** order.item()
     return cdfs
 
 
