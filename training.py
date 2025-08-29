@@ -166,7 +166,9 @@ def main(cfg):
                                                                          data.X_test.numpy(), data.y_test)
                 seed_results["deterministic_bound"] = cbound
                 seed_results["train-error"] = tr_err
+                seed_results["train-error_finetune"] = tr_err
                 seed_results["test-error"] = te_err
+                seed_results["test-error_finetune"] = te_err
                 seed_results["time"] = time
             else:
                 # First training phase
