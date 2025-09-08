@@ -110,7 +110,7 @@ class Dirichlet:
         # Renyi divergence between two dirichlet distributions
         alphas = self.get_post()
         res = log_Beta(beta)
-        res -= order / (order - 1) * log_Beta(alphas)
+        res -= log_Beta(alphas)
         res += (1 / (order - 1)) * (log_Beta(order * alphas + (1 - order) * beta) - log_Beta(alphas))
 
         return res
