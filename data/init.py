@@ -1,4 +1,4 @@
-from data.real_datasets import *
+from data.fetch import *
 
 BINARY_DATASETS = {
     'MUSH': fetch_MUSHROOMS,
@@ -16,8 +16,11 @@ MULTICLASS_DATASETS = {
     'PROTEIN': fetch_PROTEIN,
     'SENSORLESS': fetch_SENSORLESS,
     'SHUTTLE': fetch_SHUTTLE,
-    'FASHION': fetch_FASHION_MNIST,
-    'CIFAR10_Inception_v3': fetch_CIFAR10_Inception_v3,
+    'FASHION': fetch_FASHION_MNIST
+}
+
+DNN_DATASETS = {
+    'CIFAR10_Inception_v3': fetch_DNN,
 }
 
 class Dataset:
@@ -41,14 +44,16 @@ class Dataset:
 
         valid_size = kwargs.pop("valid_size", 0.2)
         if dataset in BINARY_DATASETS:
-
             self.binary = True
             data_dict = BINARY_DATASETS[dataset](path / dataset, valid_size=valid_size, **kwargs)
 
         elif dataset in MULTICLASS_DATASETS:
-
             self.binary = False
             data_dict = MULTICLASS_DATASETS[dataset](path / dataset, valid_size=valid_size, **kwargs)
+
+        elif dataset in DNN_DATASETS:
+            self.binary = False
+            data_dict = DNN_DATASETS[dataset](dataset, path / dataset, valid_size=valid_size, **kwargs)
 
         else:
             raise NotImplementedError("Dataset not supported")

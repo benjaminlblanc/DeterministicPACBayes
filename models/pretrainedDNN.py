@@ -43,6 +43,9 @@ class LinearMultiClassifier(torch.nn.Linear):
     def get_post(self):
         return self.post
 
+    def get_unchanged_post(self):
+        return self.post
+
     def get_post_grad(self):
         return self.post.grad
 

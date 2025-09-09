@@ -204,9 +204,9 @@ def fetch_MNIST(path, valid_size=0.2, test_size=0.2, seed=None):
     )
 
 
-def load_CIFAR_dataset(path, shuffle=True):
+def load_DNN_dataset(dataset_name, path, shuffle=True):
     """
-    Download (if necessary) CIFAR database file and extract it.
+    Download (if necessary) DNN database file and extract it.
     Return the tuple of training and testing dataset.
     """
     import os
@@ -216,62 +216,62 @@ def load_CIFAR_dataset(path, shuffle=True):
     import pickle
     import numpy as np
     path = Path(path)
-    CIFAR_DATA_URL = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
-    CIFAR_DIR_PATH = path / 'data/CIFAR10/'
-    CIFAR_FOLDERNAME = path / 'data/CIFAR10/cifar-10-batches-py'
-    CIFAR_BATCH_SIZE = 10000  # CIFAR10 data are split into blocks of 10000 images
+    dataset_name_small = dataset_name.split('_')[0]
 
-    CIFAR_TRAINING_FILENAMES = [
-        os.path.join(CIFAR_DIR_PATH, CIFAR_FOLDERNAME, 'data_batch_%d' % i) for i in range(1, 6)
-    ]
-    CIFAR_TESTING_FILENAMES = [os.path.join(CIFAR_DIR_PATH, CIFAR_FOLDERNAME, 'test_batch')]
+    DNN_DIR_PATH = path / f'data/{dataset_name_small}/'
+    DNN_FOLDERNAME = path / f'data/{dataset_name_small}/{dataset_name_small}-batches-py'
+    DNN_BATCH_SIZE = 10000  # data are split into blocks of 10000 images
+    if dataset_name_small == 'CIFAR10':
+        DNN_DATA_URL = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
+        DNN_TRAINING_FILENAMES = [os.path.join(DNN_DIR_PATH, DNN_FOLDERNAME, 'data_batch_%d' % i) for i in range(1, 6)]
+        DNN_TESTING_FILENAMES = [os.path.join(DNN_DIR_PATH, DNN_FOLDERNAME, 'test_batch')]
 
-    def read_CIFAR_files(filenames):
-        """
-        Return the CIFAR dataset loaded from the bunch of files.
+        def read_DNN_files(filenames):
+            """
+            Return the DNN dataset loaded from the bunch of files.
 
-        Keyword arguments:
-        filenames -- the list of filenames (strings)
-        """
-        dataset = []  # dataset to be returned
-        for file in filenames:
-            with open(file, 'rb') as fo:
-                _dict = pickle.load(fo, encoding='bytes')
-            data = _dict[b'data']
-            labels = _dict[b'labels']
-            assert data[0].size == 3 * 32 * 32
+            Keyword arguments:
+            filenames -- the list of filenames (strings)
+            """
+            dataset = []  # dataset to be returned
+            for file in filenames:
+                with open(file, 'rb') as fo:
+                    _dict = pickle.load(fo, encoding='bytes')
+                data = _dict[b'data']
+                labels = _dict[b'labels']
+                assert data[0].size == 3 * 32 * 32
 
-            for k in range(CIFAR_BATCH_SIZE):
-                image = data[k].reshape(3, 32, 32)
-                image = np.transpose(image, [1, 2, 0])
-                dataset.append([image, labels[k]])
-        return dataset
-    logging.info("Loading dataset ...")
-    # checking if the data is already in the folder
-    if not os.path.isdir(os.path.join(CIFAR_DIR_PATH, CIFAR_FOLDERNAME)):
-        # if not, we download the data
-        os.makedirs(CIFAR_DIR_PATH, exist_ok=True) # create folder for the data
-        filename = CIFAR_DATA_URL.split('/')[-1]
-        filepath = os.path.join(CIFAR_DIR_PATH, filename)
-        # try to download the file
-        try:
-            import sys
-            def _progress(cnt,blck_size,total_size):
-                sys.stdout.write('\r>> Downloading file %s (%3.1f%%)' % (filename, 100.0*cnt*blck_size/total_size))
-                sys.stdout.flush()
-            logging.info("Downloading file {f}".format(f=CIFAR_DATA_URL))
-            fpath, _ = urllib.request.urlretrieve(CIFAR_DATA_URL, filepath, reporthook=_progress)
-            statinfo = os.stat(fpath)
-            size = statinfo.st_size
-        except:
-            logging.error("Failed to download {f}".format(f=CIFAR_DATA_URL))
-            raise
+                for k in range(DNN_BATCH_SIZE):
+                    image = data[k].reshape(3, 32, 32)
+                    image = np.transpose(image, [1, 2, 0])
+                    dataset.append([image, labels[k]])
+            return dataset
+        logging.info("Loading dataset ...")
+        # checking if the data is already in the folder
+        if not os.path.isdir(os.path.join(DNN_DIR_PATH, DNN_FOLDERNAME)):
+            # if not, we download the data
+            os.makedirs(DNN_DIR_PATH, exist_ok=True) # create folder for the data
+            filename = DNN_DATA_URL.split('/')[-1]
+            filepath = os.path.join(DNN_DIR_PATH, filename)
+            # try to download the file
+            try:
+                import sys
+                def _progress(cnt,blck_size,total_size):
+                    sys.stdout.write('\r>> Downloading file %s (%3.1f%%)' % (filename, 100.0*cnt*blck_size/total_size))
+                    sys.stdout.flush()
+                logging.info("Downloading file {f}".format(f=DNN_DATA_URL))
+                fpath, _ = urllib.request.urlretrieve(DNN_DATA_URL, filepath, reporthook=_progress)
+                statinfo = os.stat(fpath)
+                size = statinfo.st_size
+            except:
+                logging.error("Failed to download {f}".format(f=DNN_DATA_URL))
+                raise
 
-        print('Succesfully downloaded {f} ({s} bytes)'.format(f=filename,s=size))
-        tarfile.open(filepath, 'r:gz').extractall(CIFAR_DIR_PATH)
+            print('Succesfully downloaded {f} ({s} bytes)'.format(f=filename,s=size))
+            tarfile.open(filepath, 'r:gz').extractall(DNN_DIR_PATH)
 
-    trainingData = read_CIFAR_files(CIFAR_TRAINING_FILENAMES)
-    testingData = read_CIFAR_files(CIFAR_TESTING_FILENAMES)
+        trainingData = read_DNN_files(DNN_TRAINING_FILENAMES)
+        testingData = read_DNN_files(DNN_TESTING_FILENAMES)
 
     if shuffle:
         logging.info("Shuffling data ...")
@@ -281,7 +281,7 @@ def load_CIFAR_dataset(path, shuffle=True):
 
     return trainingData, testingData
 
-def create_CIFAR10_Inception_v3(path):
+def create_DNN(dataset_name, path):
     import tensorflow as tf
     import time
     import numpy as np
@@ -298,7 +298,7 @@ def create_CIFAR10_Inception_v3(path):
     url = 'http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz'
     download_path = path / 'inception-2015-12-05.tgz'
     model_extract_path = path / 'models/classify_image_graph_def.pb'
-    data_extract_path = path / 'data/CIFAR10_Inception_v3/CIFAR10_Inception_v3.npz'
+    data_extract_path = path / f'data/{dataset_name}/{dataset_name}.npz'
 
     # Extract the specific file from the tar.gz archive
     # Check if model already exists
@@ -326,7 +326,7 @@ def create_CIFAR10_Inception_v3(path):
 
     if not os.path.exists(data_extract_path):
         # Loading the dataset to transform
-        data_training, data_testing = load_CIFAR_dataset(path, shuffle=False)
+        data_training, data_testing = load_DNN_dataset(dataset_name, path, shuffle=False)
 
         graph_def = tf.compat.v1.GraphDef()
         with open(path / 'models/classify_image_graph_def.pb', "rb") as f:
@@ -335,8 +335,8 @@ def create_CIFAR10_Inception_v3(path):
 
         # number of samples to extract from
 
-        nsamples_training = 50000    # at most 50000
-        nsamples_testing  = 10000    # at most 10000
+        nsamples_training = len(data_training)    # at most 50000
+        nsamples_testing  = len(data_testing)     # at most 10000
 
         nsamples = nsamples_training + nsamples_testing
 
@@ -369,7 +369,7 @@ def create_CIFAR10_Inception_v3(path):
             print('\nElapsed time %.1f seconds' % (time.time()-start))
 
         # Create data directory if it doesn't exist
-        os.makedirs(path / 'data/CIFAR10_Inception_v3/', exist_ok=True)
+        os.makedirs(path / f'data/{dataset_name}/', exist_ok=True)
 
         # Finally we can save our work to the file
         np.savez_compressed(data_extract_path,
@@ -378,13 +378,13 @@ def create_CIFAR10_Inception_v3(path):
                             labels_training=y_training,
                             labels_testing=y_testing )
 
-def fetch_CIFAR10_Inception_v3(path, valid_size=0.2, test_size=0.2, seed=None):
+def fetch_DNN(dataset_name, path, valid_size=0.2, test_size=0.2, seed=None):
     path = Path(path).parent.parent
     # If necessary, create the dataset
-    create_CIFAR10_Inception_v3(path)
+    create_DNN(dataset_name, path)
 
     # Load the compressed dataset
-    data = np.load(path / 'data/CIFAR10_Inception_v3/CIFAR10_Inception_v3.npz')
+    data = np.load(path / f'data/{dataset_name}/{dataset_name}.npz')
 
     # Extract individual arrays using the keys from savez_compressed
     X_train_full = data['features_training']

@@ -190,9 +190,11 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss
         string += f"; {bound_type} bound: {round(best_obj, 4)}"
 
     if risk_type == "FO":
-        triple_bnd = compute_bound(best_model, test_bound, n, trainloader, lambda x, y, z: triple_loss(x, y, z, pred_type, distribution_name, n_classes, output_type), False)
+        triple_bnd = compute_bound(best_model, test_bound, n, trainloader, lambda x, y, z:
+            triple_loss(x, y, z, pred_type, distribution_name, n_classes, output_type), False)
         M = torch.prod(torch.tensor(best_model.get_unchanged_post().shape))
-        partition_bound = compute_part_triple_bound(best_model, bound, n, M, trainloader, loss, distribution_name, Gibbs_risk=final_bound['bound'])[2]
+        partition_bound = compute_part_triple_bound(best_model, bound, n, M, trainloader, loss, distribution_name,
+                                                    final_bound['bound'], multiclass=n_classes > 2)[2]
         string += f"; partition bound: {round(partition_bound.item(), 4)}\n"
     else:
         triple_bnd = (None, None)

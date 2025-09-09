@@ -9,7 +9,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import wandb
 wandb.login()
 
-from data.datasets import Dataset, TorchDataset
+from data.init import Dataset, TorchDataset
 from models.majority_vote import MultipleMajorityVote, MajorityVote
 from models.pretrainedDNN import LinearMultiClassifier
 
