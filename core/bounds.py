@@ -24,7 +24,7 @@ def seeger_bound(n, model, risk, delta, div, disintegrated=False, coeff=1, order
         if div == 'Renyi':
             const = (2 * order - 1) / (order - 1) * np.log(2 / delta) + np.log(2 * n)
         else:
-            const = np.log(4 * (n ** 2 / 4) ** 0.5 / delta)
+            const = np.log(2 * n / delta)
     else:
         if div == 'Renyi':
             const = (2 * order - 1) / (order - 1) * np.log(2 / delta) + np.log(2 * n ** 0.5)

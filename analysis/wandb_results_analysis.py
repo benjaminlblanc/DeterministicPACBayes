@@ -3,7 +3,7 @@ import numpy as np
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
-def csv_to_latex(file_name, hyperparameters, numerical_results, metrics, last_distinctions, show=False):
+def csv_to_latex(file_name, hyperparameters, numerical_results, metrics, last_distinctions, show=False, granul=False):
     """
     Generates latex table from csv file.
     """
@@ -72,7 +72,10 @@ def csv_to_latex(file_name, hyperparameters, numerical_results, metrics, last_di
     # Finally, we generate the latex table
     for pred_name in np.unique(final_results['0'][:, 0]):
         n_datasets = len(np.unique(final_results['0'][final_results['0'][:, 0] == pred_name, 1]))
-        generate_latex_table(final_results, pred_name, n_datasets)
+        if granul:
+            generate_granul_latex_table(final_results, pred_name, n_datasets)
+        else:
+            generate_latex_table(final_results, pred_name, n_datasets)
 
 def generate_latex_table(final_results, pred_name, n_datasets):
     first = "\multirow{"+str(n_datasets)+"}{*}{"+pred_name+"}"
@@ -118,15 +121,50 @@ def generate_latex_table(final_results, pred_name, n_datasets):
     print(f" & {last_dataset} & {FO} $\pm$ {FO_std} & {FO_err} $\pm$ {FO_err_std} & {SO} $\pm$ {SO_std} & {SO_err} $\pm$ {SO_err_std} & {Bin} $\pm$ {Bin_std} & {Bin_err} $\pm$ {Bin_err_std} & {CBound} $\pm$ {CBound_std} & {CBound_err} $\pm$ {CBound_err_std} & {Ben} $\pm$ {Ben_std} & {Ben_err} $\pm$ {Ben_err_std} \\\ ")
     print("\hline")
 
-file = 'wandb_export_2025-08-28T15_41_35.960-04_00.csv'
+def generate_granul_latex_table(final_results, pred_name, n_datasets):
+    first = "\multirow{"+str(n_datasets)+"}{*}{"+pred_name+"}"
+    last_dataset = ''
+    Triple, Part, Both = '', '', ''
+    Triple_err, Part_err, Both_err = '', '', ''
+    Triple_std, Part_std, Both_std = '', '', ''
+    Triple_err_std, Part_err_std, Both_err_std = '', '', ''
+    for i in range(len(final_results["0"])):
+        if final_results["0"][i][0] == pred_name:
+            if final_results["0"][i][1] != last_dataset and last_dataset != '':
+                print(f"{first} & {last_dataset} & {Triple} $\pm$ {Triple_std} & {Triple_err} $\pm$ {Triple_err_std} & {Part} $\pm$ {Part_std} & {Part_err} $\pm$ {Part_err_std} & {Both} $\pm$ {Both_std} & {Both_err} $\pm$ {Both_err_std} \\\ ")
+                first = ''
+                Triple, Part, Both = '', '', ''
+                Triple_err, Part_err, Both_err = '', '', ''
+                Triple_std, Part_std, Both_std = '', '', ''
+                Triple_err_std, Part_err_std, Both_err_std = '', '', ''
+            last_dataset = final_results["0"][i][1]
+            if final_results["0"][i][2] == 'FO':
+                Part = np.round(final_results["0"][i][3] * 100, 1)
+                Part_err = np.round(final_results["0"][i][4] * 100, 1)
+                Part_std = np.round(final_results["0"][i][6] * 100, 1)
+                Part_err_std = np.round(final_results["0"][i][7] * 100, 1)
+                Triple = np.round(final_results["1"][i][3] * 100, 1)
+                Triple_err = np.round(final_results["1"][i][4] * 100, 1)
+                Triple_std = np.round(final_results["1"][i][6] * 100, 1)
+                Triple_err_std = np.round(final_results["1"][i][7] * 100, 1)
+                Both = np.round(final_results["2"][i][3] * 100, 1)
+                Both_err = np.round(final_results["2"][i][4] * 100, 1)
+                Both_std = np.round(final_results["2"][i][6] * 100, 1)
+                Both_err_std = np.round(final_results["2"][i][7] * 100, 1)
+    print(f"{first} & {last_dataset} & {Triple} $\pm$ {Triple_std} & {Triple_err} $\pm$ {Triple_err_std} & {Part} $\pm$ {Part_std} & {Part_err} $\pm$ {Part_err_std} & {Both} $\pm$ {Both_std} & {Both_err} $\pm$ {Both_err_std} \\\ ")
+    print("\hline")
+
+file = 'wandb_export_2025-09-04T12_33_42.940-04_00.csv'
 hyperparams = ['M', 'batch_size', 'dataset', 'delta', 'distribution', 'is_using_wandb', 'lr', 'num_epochs',
                'num_trials', 'num_workers', 'order', 'pred', 'prior', 'project_name', 'rand_n', 'risk', 'stump_init']
 num_results = ['test-error_finetune', 'test-error']  # Do not change that order
-metric = ['triple_bnd_tnd', 'deterministic_bound']
+metric = ['part_triple_bnd_tnd', 'deterministic_bound']
+#metric = ['part_bnd_tnd', 'triple_bnd_tnd', 'part_triple_bnd_tnd']
 final_distinction = ['pred', 'dataset', 'risk']   # Do not change that order
 csv_to_latex(file_name=file,
              hyperparameters=hyperparams,
              numerical_results=num_results,
              metrics=metric,
              last_distinctions=final_distinction,
-             show=False)
+             show=False,
+             granul=False)
