@@ -54,7 +54,7 @@ def create_mv_mu(theta, oh_y_pred_minus_oh_y_i):
     Creation of the mu values for the majority vote gaussian stochastic average loss (see paper).
     """
     w = theta.reshape(1, len(theta))
-    mu_full = torch.matmul(w, torch.transpose(oh_y_pred_minus_oh_y_i, 0, 2)).squeeze().T
+    mu_full = torch.matmul(w, torch.transpose(oh_y_pred_minus_oh_y_i, 0, 2)).squeeze(1).T
     return mu_full
 
 
