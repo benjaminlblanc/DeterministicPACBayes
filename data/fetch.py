@@ -379,6 +379,11 @@ def create_DNN(dataset_name, path):
                             labels_testing=y_testing )
 
 def fetch_DNN(dataset_name, path, valid_size=0.2, test_size=0.2, seed=None):
+    """
+    This function for fetching an embedded dataset is inspired by
+        https://github.com/rnoxy/cifar10-cnn/blob/master/Feature_extraction_using_keras.ipynb.
+    """
+
     path = Path(path).parent.parent
     # If necessary, create the dataset
     create_DNN(dataset_name, path)

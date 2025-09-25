@@ -94,8 +94,11 @@ def compute_part_triple_bound(model, bound, n, M, trainloader, loss, distributio
         Gibbs_risk = compute_bound(model, bound, n, trainloader, loss, False)
 
     # We compute the best b and c out of the one given by the partition bound and the one given by the triple bound
-    best_c = max(c, c_triple)
     best_b = max(b, b_triple)
+    best_c = max(c, c_triple)
+
+    b_triple = max(b_triple, 0)
+    c_triple = max(c_triple, 0.5)
 
     part = (Gibbs_risk - b) / (c - b)
     # Triple bound yields weird results if Gibbs_risk < b_triple, c_triple < b_triple, or

@@ -86,6 +86,8 @@ def bin_loss(y_target, y_pred, theta, predictor, distribution, n_classes, n, out
     Loss used for the computation of the binomial bound.
     """
     first_order_loss = moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, order=1, output_type=output_type)
+    if not torch.is_tensor(first_order_loss):
+        first_order_loss = torch.tensor(first_order_loss)
     bin_loss = torch.zeros(len(first_order_loss))
     for i in range(n // 2, n + 1):
         bin_loss += torch.exp(log_prob_bin(torch.tensor(i), torch.tensor(n), first_order_loss))

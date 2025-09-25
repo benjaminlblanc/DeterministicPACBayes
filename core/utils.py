@@ -112,6 +112,8 @@ def log_stirling_approximation(n):
     """
     if n == 0:
         return 0
+    if n < 25:
+        return math.log(math.factorial(n))
     return n * torch.log(n) - n + 0.5 * torch.log(2 * math.pi * n)
 
 
