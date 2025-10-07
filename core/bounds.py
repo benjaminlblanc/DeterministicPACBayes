@@ -2,9 +2,30 @@ import numpy as np
 import torch
 
 from core.kl_inv import klInvFunction
-from core.utils import find_ns
+from core.utils import find_ns, bin_cum
 from models.majority_vote import MultipleMajorityVote
 
+
+def test_set_bound(n_err, n, delta):
+    """
+    Implementation of Langford's test bound (Theorem 3.3, Tutorial on Practical Prediction Theory for Classification).
+    """
+    gamma_sup, gamma_inf, gamma = 1, 0, 0.5
+    for j in range(10):
+        pro = bin_cum(n_err, n, gamma)
+        if pro >= delta:
+            gamma_inf = gamma
+        else:
+            gamma_sup = gamma
+        gamma = (gamma_sup + gamma_inf) / 2
+    return gamma
+
+def vcdim_bound(n, model, err, delta):
+    """
+    Implementation of the VC-dim generalization bound.
+    """
+    vc_dim = torch.tensor(model.get_post().shape)
+    return (err + ((vc_dim * (np.log(2 * n / vc_dim) + 1) + np.log(4 / delta)) / n) ** 0.5).item()
 
 def seeger_bound(n, model, risk, delta, div, disintegrated=False, coeff=1, order=None, verbose=False, monitor=None):
     """
@@ -96,4 +117,6 @@ def triple_bound(n, model, risks, delta, div, disintegrated=False, coeff=1, orde
 BOUNDS = {
     "seeger": seeger_bound,
     "triple": triple_bound,
+    "test": test_set_bound,
+    "vcdim": vcdim_bound
 }

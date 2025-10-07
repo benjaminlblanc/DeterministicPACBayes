@@ -9,12 +9,7 @@ def initialize_risk(cfg, n_classes):
     Initialize the loss function, the bound coefficient, kl factor and divergence type given the considered risk.
     """
     dst = cfg.training.distribution
-    if cfg.training.risk == "Tr":
-        loss = lambda x, y, z: deterministic_loss(x, y, z, cfg.model.output)
-        bound_coeff = 1.
-        kl_factor = 1.
-        div = 'KL'
-    elif cfg.training.risk == "FO":
+    if cfg.training.risk == "FO":
         loss =  lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, dst, n_classes, 1, cfg.model.output)
         bound_coeff = 1.
         kl_factor = 1.
@@ -39,12 +34,17 @@ def initialize_risk(cfg, n_classes):
         bound_coeff = None
         kl_factor = None
         div = None
+    elif cfg.training.risk in ["Test", "VCdim"]:
+        loss = lambda x, y, z: deterministic_loss(x, y, z, dst, n_classes)
+        bound_coeff = 1.
+        kl_factor = 1.
+        div = 'KL'
     else:
         raise NotImplementedError
     return loss, bound_coeff, kl_factor, div
 
 
-def deterministic_loss(y_target, y_pred, theta, n_classes):
+def deterministic_loss(y_target, y_pred, theta, distribution, n_classes):
     """
     Compute the loss of the corresponding deterministic classifier.
     """
@@ -54,9 +54,16 @@ def deterministic_loss(y_target, y_pred, theta, n_classes):
             y_pred = (y_pred + 1) / 2
             y_target = (y_target + 1) / 2
         y_pred_oh = torch.nn.functional.one_hot(y_pred.to(torch.long), n_classes)
+        y_target = y_target.to(torch.long)
         weighted_preds = y_pred_oh.transpose(1, 2) * theta
         summed_preds = torch.sum(weighted_preds, dim=2)
-        return torch.nn.CrossEntropyLoss(reduction='none')(summed_preds, y_target)
+        if n_classes == 2:
+            if distribution == "gaussian":
+                return torch.nn.BCELoss(reduction='none')(torch.sigmoid(summed_preds[:, 1]), y_target.squeeze().to(torch.float))
+            return torch.nn.BCELoss(reduction='none')(summed_preds[:, 1], y_target.squeeze().to(torch.float))
+        if distribution == "gaussian":
+            return torch.nn.CrossEntropyLoss(reduction='none')(torch.sigmoid(summed_preds), y_target.squeeze())
+        return torch.nn.CrossEntropyLoss(reduction='none')(summed_preds, y_target.squeeze())
     else:
         # Deterministic prediction for pred = LinearClassifier
         summed_preds = torch.matmul(y_pred, theta)

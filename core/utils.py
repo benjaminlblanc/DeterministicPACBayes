@@ -38,9 +38,7 @@ def whether_to_run_run(cfg):
         assert cfg.model.output in ['class', 'proba'], "RandomForests implies class or proba"
         assert cfg.dataset in ['MNIST', 'PENDIGITS', 'PROTEIN', 'SENSORLESS', 'SHUTTLE', 'FASHION']
 
-    assert cfg.training.risk in ['Tr', 'FO', 'SO', 'Bin', 'Dis_Renyi', 'Cbound']
-    if cfg.training.risk == "Tr":
-        assert cfg.bound.type == "triple"
+    assert cfg.training.risk in ['FO', 'SO', 'Bin', 'Dis_Renyi', 'Cbound', 'Test', 'VCdim']
     if cfg.training.risk == "Bin":
         assert cfg.training.rand_n > 0
     if cfg.training.risk == "Dis_Renyi":
@@ -69,9 +67,13 @@ def create_root_dir(cfg):
 
 def initialize_predictors(cfg, data):
     if cfg.model.pred == "UniformStumps":
-        return uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0),
-                                       cfg.model.stump_init, cfg.training.distribution)
+        return uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0),
+                                       data.X_train.max(0), cfg.model.stump_init, cfg.training.distribution)
     elif cfg.model.pred == "RandomForests":
+        if cfg.training.risk == "Test":
+            m_train = int(len(data.X_train) * 0.6)
+            return two_forests(cfg.model.M, data.X_train[:m_train], data.y_train[:m_train], samples_prop=cfg.model.samples_prop,
+                               max_depth=cfg.model.max_tree_depth, binary=data.binary, output_type=cfg.model.output)
         return two_forests(cfg.model.M, data.X_train, data.y_train, samples_prop=cfg.model.samples_prop,
                            max_depth=cfg.model.max_tree_depth, binary=data.binary, output_type=cfg.model.output)
     elif cfg.model.pred == "LinearClassifier":
@@ -106,6 +108,15 @@ def updating_last_seed_results(seed_results, cfg, train_error, test_error, part_
     seed_results["part_triple_bnd_tnd"] = part_triple_bnd_tnd
     return seed_results
 
+def bin_cum(k, n, r):
+    """
+    Logarithm of P(x <= k), if X ~ Bin(n, r)
+    """
+    prob_cum = 0
+    for i in range(k + 1):
+        prob_cum += math.exp(log_prob_bin(torch.tensor(i), n, r))
+    return prob_cum
+
 def log_stirling_approximation(n):
     """
     Stirling's approximation for the logarithm of the factorial
@@ -130,6 +141,8 @@ def log_prob_bin(k, n, r):
     Logarithm of P(x = k), if X ~ Bin(n, r)
     """
     epsilon = torch.tensor(1e-10)
+    if not torch.is_tensor(r):
+        r = torch.tensor(r)
     return log_binomial_coefficient(n, k) + k * torch.log(torch.max(r, epsilon)) + \
                                       (n - k) * torch.log(torch.max(1 - r, epsilon))
 

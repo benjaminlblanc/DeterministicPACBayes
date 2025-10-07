@@ -3,6 +3,7 @@ from time import time
 from tqdm import tqdm
 import torch
 
+from core.bounds import test_set_bound, vcdim_bound
 from core.deterministic_bounding import compute_bound, compute_part_triple_bound
 from core.losses import triple_loss
 
@@ -122,7 +123,8 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
 
     if bounds is not None:
         for k in bounds.keys():
-            total_metrics[k] = bounds[k](n, model, risk, False).item()
+            if bounds[k] is not None:
+                total_metrics[k] = bounds[k](n, model, risk, False).item()
 
     if monitor:
         monitor.write(epoch, **{tag: total_metrics})
@@ -130,7 +132,7 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
     return total_metrics
 
 
-def stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss,
+def stochastic_routine(trainloader, validloader, trtestloader, testloader, model, optimizer, bound, n, loss,
                        monitor, lr_scheduler, test_bound, n_classes, cfg):
     """
     Main training pipeline.
@@ -163,7 +165,10 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss
         # A training epoch is completed
         train_routine(trainloader, model, optimizer, epoch=e, bound=bound, loss=loss, monitor=monitor)
         # Just for monitoring purposes
-        train_stats = val_routine(trainloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train")
+        if validloader is None:
+            train_stats = val_routine(trainloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train")
+        else:
+            train_stats = val_routine(validloader, model, epoch=e, bounds={bound_type: bound}, loss=loss, monitor=monitor, tag="train")
 
         pbar.set_description("train obj %s" % train_stats[metric_to_optimize])
         # If there are improvements, we update the best model
@@ -181,8 +186,16 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss
     test_error = test_routine(testloader, best_model)
     string = f"Test error: {round(test_error['error'], 4)}"
     if metric_to_optimize == "error":
-        train_error = best_obj
-        final_bound = {'bound': 1}
+        if cfg.training.risk == "Test":
+            trtest_error = test_routine(trtestloader, best_model)
+            bound = test_set_bound(int(trtest_error['error'] * n / 5), torch.tensor(int(n / 5)), cfg.bound.delta)
+            string += f"; test-set bound: {round(bound, 4)}"
+        elif cfg.training.risk == "VCdim":
+            error = test_routine(trainloader, best_model)
+            bound = vcdim_bound(n, model, error['error'], cfg.bound.delta)
+            string += f"; VC-dim bound: {round(bound, 4)}"
+        train_error = {'error': best_obj}
+        final_bound = {'bound': bound}
         string += "\n"
     else:
         train_error = val_routine(trainloader, best_model)

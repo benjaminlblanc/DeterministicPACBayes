@@ -34,4 +34,10 @@ do
   #  do
   #    python3 training.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.01 training.distribution=gaussian model.prior=0 training.risk=$r model.pred=$prd is_using_wandb=$wandb bound.order=$ordr bound.n_grid=$n_grd training.seed=$seed model.output=class model.max_tree_depth=None
   #  done
+
+  r=Test
+  python3 training.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.1 training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb training.seed=$seed model.output=class model.max_tree_depth=None
+
+  r=VCdim
+  python3 training.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.1 training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb training.seed=$seed model.output=class model.max_tree_depth=None
 done
