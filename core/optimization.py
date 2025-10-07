@@ -194,7 +194,7 @@ def stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss
             triple_loss(x, y, z, pred_type, distribution_name, n_classes, output_type), False)
         M = torch.prod(torch.tensor(best_model.get_unchanged_post().shape))
         partition_bound = compute_part_triple_bound(best_model, bound, n, M, trainloader, loss, distribution_name,
-                                                    final_bound['bound'], multiclass=n_classes > 2)[2]
+                                                    final_bound['bound'], multiclass=n_classes > 2)[0]
         string += f"; partition bound: {round(partition_bound.item(), 4)}\n"
     else:
         triple_bnd = (None, None)

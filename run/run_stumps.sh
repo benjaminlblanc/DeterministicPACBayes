@@ -5,7 +5,7 @@ m=10
 trials=5
 seed=541944
 
-for d in ADULT CODRNA MUSH HABER PHIS SVMGUIDE TTT
+for d in ADULT CODRNA HABER MUSH PHIS SVMGUIDE TTT
 do
   r=FO
   python3 training.py project_name=$name num_trials=$trials dataset=$d model.M=$m training.lr=0.1 training.distribution=categorical model.prior=adjusted training.risk=$r model.pred=$prd is_using_wandb=$wandb training.seed=$seed

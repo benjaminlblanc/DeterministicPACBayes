@@ -69,8 +69,8 @@ def create_root_dir(cfg):
 
 def initialize_predictors(cfg, data):
     if cfg.model.pred == "UniformStumps":
-        return uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0),
-                                       data.X_train.max(0), cfg.model.stump_init)
+        return uniform_decision_stumps(cfg.model.M, data.X_train.shape[1], data.X_train.min(0), data.X_train.max(0),
+                                       cfg.model.stump_init, cfg.training.distribution)
     elif cfg.model.pred == "RandomForests":
         return two_forests(cfg.model.M, data.X_train, data.y_train, samples_prop=cfg.model.samples_prop,
                            max_depth=cfg.model.max_tree_depth, binary=data.binary, output_type=cfg.model.output)

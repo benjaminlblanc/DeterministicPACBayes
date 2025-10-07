@@ -56,7 +56,7 @@ def get_b_c(possible_values, M, distribution, multiclass=False):
     elif distribution == "dirichlet":
         return I(biggest_sum + smallest_sum, torch.tensor(0)), I(smallest_sum, biggest_sum)
     elif distribution == "gaussian":
-        return Phi(torch.sum(torch.abs(possible_values)) / M ** 0.5), 1 - Phi(biggest_sum / M ** 0.5)
+        return Phi(torch.sum(torch.abs(possible_values)) / M ** 0.5), 1 - Phi((biggest_sum - smallest_sum) / M ** 0.5)
 
 def compute_bound(model, bound, n, trainloader, loss, disintegrated):
     """
@@ -122,8 +122,8 @@ def clip_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, di
     post = model.get_unchanged_post().clone()
     M = len(best_post)
     best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                           b_triple=b_surr, c_triple=c_surr)[2]
-    print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")
+                                           b_triple=b_surr, c_triple=c_surr)[0]
+    print(f"\nCurrent partition bound: {round(best_bound.item(), 4)}.")
     print("Clipping weak learners...")
     pbar = tqdm(list(range(10, 100, 10)) + list(range(91, 100, 1)))
     for i in pbar:
@@ -133,12 +133,12 @@ def clip_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, di
         post[torch.abs(best_post) <= sorted_post[max_idx]] = prior_coefficient
         model.set_post(post)
         cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                              b_triple=b_surr, c_triple=c_surr)[2]
+                                              b_triple=b_surr, c_triple=c_surr)[0]
         if cur_bound < best_bound:
             best_bound = cur_bound.clone()
             best_post = post.clone()
     model.set_post(best_post)
-    print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")
+    print(f"\nCurrent partition bound: {round(best_bound.item(), 4)}.")
     return model
 
 def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_name, b_surr, c_surr):
@@ -149,7 +149,7 @@ def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_n
     best_post = model.get_unchanged_post().clone()
     M = len(best_post)
     best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                           b_triple=b_surr, c_triple=c_surr)[2]
+                                           b_triple=b_surr, c_triple=c_surr)[0]
     while True:
         previous_best_bound = best_bound.clone()
         rang, factor = [], torch.max(model.get_unchanged_post()) / 100
@@ -168,7 +168,7 @@ def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_n
                     model.set_post(post)
                     # And compute the resulting bound.
                     cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                                          b_triple=b_surr, c_triple=c_surr)[2]
+                                                          b_triple=b_surr, c_triple=c_surr)[0]
                     if cur_bound < best_bound:
                         best_bound = cur_bound.clone()
                         best_post = post.clone()
@@ -178,7 +178,7 @@ def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_n
         if previous_best_bound < best_bound + 1e-2:
             break
     model.set_post(best_post.requires_grad_(True))
-    print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")
+    print(f"\nCurrent partition bound: {round(best_bound.item(), 4)}.")
     return model
 
 
@@ -192,7 +192,7 @@ def weights_rescaling(model, n, bound, trainloader, loss, distribution_name, b_s
     best_post = model.get_unchanged_post().clone()
     M = len(best_post)
     best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                           b_triple=b_surr, c_triple=c_surr)[2]
+                                           b_triple=b_surr, c_triple=c_surr)[0]
     low = 0
     high = 10 if distribution_name in ['categorical', 'dirichlet'] else 1e2
     pbar = tqdm(range(15))
@@ -202,7 +202,7 @@ def weights_rescaling(model, n, bound, trainloader, loss, distribution_name, b_s
             post = initial_post * mean
             model.set_post(post)
             cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                                  b_triple=b_surr, c_triple=c_surr)[2]
+                                                  b_triple=b_surr, c_triple=c_surr)[0]
             if cur_bound < best_bound:
                 best_bound = cur_bound.clone()
                 best_post = post.clone()
@@ -210,5 +210,5 @@ def weights_rescaling(model, n, bound, trainloader, loss, distribution_name, b_s
             model.set_post(best_post)
             high -= 1
     model.set_post(best_post)
-    print(f"\nCurrent partition-triple bound: {round(best_bound.item(), 4)}.")
+    print(f"\nCurrent partition bound: {round(best_bound.item(), 4)}.")
     return model

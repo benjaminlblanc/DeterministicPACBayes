@@ -4,7 +4,7 @@ import numpy as np
 ## DECISION STUMPS ##
 # Only supports binary classification
 
-def uniform_decision_stumps(M, d, min_v, max_v, init):
+def uniform_decision_stumps(M, d, min_v, max_v, init, distr):
     """
     Create the decision stump-forest classifier, composed of 2*M evenly spaced stumps per feature.
         The first M predicts a class, the other one the other class.
@@ -21,16 +21,20 @@ def uniform_decision_stumps(M, d, min_v, max_v, init):
     # Get M evenly spaced thresholds in the interval [min_v, max_v] per dimension
     thresholds = torch.from_numpy(np.linspace(min_v, max_v, M, endpoint=False, axis=-1)).float()
 
-    # Two possible initializations
-    if init == 'ones':
-        sigs = torch.ones((d, M * 2))
-    elif init == 'rand':
-        sigs = torch.rand((d, M * 2))
-        sigs[..., M:] = sigs[..., :M]
+    if distr == "gaussian":
+        stumps = lambda x: stumps_predict(x, thresholds, 1)
+        return stumps, d * M
+    else:
+        # Two possible initializations
+        if init == 'ones':
+            sigs = torch.ones((d, M * 2))
+        elif init == 'rand':
+            sigs = torch.rand((d, M * 2))
+            sigs[..., M:] = sigs[..., :M]
 
-    sigs[..., :M] *= -1  # first M*d stumps return one class, last M*d return the other
-    stumps = lambda x: stumps_predict(x, torch.cat((thresholds, thresholds), 1), sigs)
-    return stumps, d * M * 2
+        sigs[..., :M] *= -1  # first M*d stumps return one class, last M*d return the other
+        stumps = lambda x: stumps_predict(x, torch.cat((thresholds, thresholds), 1), sigs)
+        return stumps, d * M * 2
 
 def stumps_predict(x, thresholds, signs):
     return (signs * (1 - 2*(x[..., None] > thresholds))).reshape((len(x), -1))
