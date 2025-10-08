@@ -235,7 +235,7 @@ def generate_distr_latex_table(final_results, pred_name, n_datasets):
 
 file = 'wandb_export.csv'
 hyperparams = ['M', 'batch_size', 'dataset', 'delta', 'distribution', 'is_using_wandb', 'lr', 'num_epochs',
-               'num_trials', 'num_workers', 'order', 'pred', 'prior', 'project_name', 'rand_n', 'risk', 'stump_init']
+               'num_trials', 'num_workers', 'order', 'pred', 'prior', 'project_name', 'rand_N', 'risk', 'stump_init']
 csv_to_latex(file_name=file,
              hyperparameters=hyperparams,
              type='regular',  # type \in ['regular', 'error_min', 'granular', 'distributions']

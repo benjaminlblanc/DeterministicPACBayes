@@ -7,7 +7,7 @@ num_workers (int): For dataloaders.
 is_using_wandb (bool): Whether to save the results in wandb.
 
 model:
-  M (int): Number of base classifiers, only for pred in [UniformStumps, RandomForests]: if UniformStumps, 2*M per
+  n (int): Number of base classifiers, only for pred in [UniformStumps, RandomForests]: if UniformStumps, 2*M per
     feature; if RandomForests, M tree per forest (two forests).
   prior (int or str): Choices between and int or 'adjusted', meaning 1/number of base classifiers.
   pred (str): Choices between UniformStumps, RandomForests, LinearClassifier.
@@ -27,9 +27,10 @@ training:
   risk (str): Choices between 'Tr', 'FO', 'SO', 'Bin', 'Cbound', 'Dis_Renyi'. The first one train the true risk
     directly. For the other ones, see the article. 'Dis_KL' is computed implicitly with 'FO'.
   distribution (str): Choices between 'categorical', 'dirichlet', 'gaussian'.
-  rand_n (int): A parameter for the Binomial algorithm (see paper). Only for risk = 'Bin'.
+  rand_N (int): A parameter for the Binomial algorithm (see paper). Only for risk = 'Bin'.
   compute_disintegration (bool): Whether to compute disintegrated bound. Only for risk in ['FO', 'Dis_Renyi'].
   normalize_data (bool): Whether to normalize the features. Recommended to use True.
+  splits (list of three floats): Train, valid and test splits.
 
 bound:
   delta (float): Confidence parameter.

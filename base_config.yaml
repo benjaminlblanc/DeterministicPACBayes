@@ -5,7 +5,7 @@ num_workers: 8
 is_using_wandb: --
 
 model:
-  M: --
+  n: --
   prior: --
   pred: --
   stump_init: ones
@@ -21,9 +21,10 @@ training:
   num_epochs: 100
   risk: --
   distribution: --
-  rand_n: --
+  rand_N: --
   compute_disintegration: False
   normalize_data: True
+  splits: [0.6, 0.2, 0.2]
 
 bound:
   delta: 0.05

@@ -20,9 +20,9 @@ def initialize_risk(cfg, n_classes):
         kl_factor = 2.
         div = 'KL'
     elif cfg.training.risk == "Bin":
-        loss =  lambda x, y, z: bin_loss(x, y, z, cfg.model.pred, dst, n_classes, cfg.training.rand_n, cfg.model.output)
+        loss =  lambda x, y, z: bin_loss(x, y, z, cfg.model.pred, dst, n_classes, cfg.training.rand_N, cfg.model.output)
         bound_coeff = 2.
-        kl_factor = cfg.training.rand_n
+        kl_factor = cfg.training.rand_N
         div = 'KL'
     elif cfg.training.risk == "Dis_Renyi":
         loss = lambda x, y, z: moment_loss(x, y, z, cfg.model.pred, dst, n_classes, 1, cfg.model.output)
@@ -69,26 +69,7 @@ def deterministic_loss(y_target, y_pred, theta, distribution, n_classes):
         summed_preds = torch.matmul(y_pred, theta)
         return torch.nn.CrossEntropyLoss(reduction='none')(summed_preds, y_target.squeeze())
 
-
-def triple_loss(y_target, y_pred, theta, predictor, distribution, n_classes, output_type):
-    """
-    Computes the average loss, the average loss when an error is made, and the average loss when no error is made.
-    """
-    first_loss = moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, 1, output_type)
-    if not torch.is_tensor(first_loss):
-        first_loss = torch.tensor(first_loss)
-    second_loss = torch.where(first_loss >= 0.5, first_loss, torch.zeros(1))
-    third_loss = torch.where(first_loss < 0.5, first_loss, torch.zeros(1))
-    if torch.sum(second_loss) == 0:
-        # We take care of special cases, such as no error is made.
-        if torch.sum(third_loss.nonzero()) == 0:
-            return first_loss, torch.tensor(0.5, dtype=torch.float), torch.tensor(0, dtype=torch.float)
-        return first_loss, torch.tensor(0.5, dtype=torch.float), third_loss[third_loss.nonzero()]
-    elif torch.sum(third_loss) == 0:
-        return first_loss, second_loss[second_loss.nonzero()], torch.tensor(0, dtype=torch.float)
-    return first_loss, second_loss[second_loss.nonzero()], third_loss[third_loss.nonzero()]
-
-def bin_loss(y_target, y_pred, theta, predictor, distribution, n_classes, n, output_type):
+def bin_loss(y_target, y_pred, theta, predictor, distribution, n_classes, order, output_type):
     """
     Loss used for the computation of the binomial bound.
     """
@@ -96,8 +77,8 @@ def bin_loss(y_target, y_pred, theta, predictor, distribution, n_classes, n, out
     if not torch.is_tensor(first_order_loss):
         first_order_loss = torch.tensor(first_order_loss)
     bin_loss = torch.zeros(len(first_order_loss))
-    for i in range(n // 2, n + 1):
-        bin_loss += torch.exp(log_prob_bin(torch.tensor(i), torch.tensor(n), first_order_loss))
+    for i in range(order // 2, order + 1):
+        bin_loss += torch.exp(log_prob_bin(torch.tensor(i), torch.tensor(order), first_order_loss))
     return bin_loss
 
 def moment_loss(y_target, y_pred, theta, predictor, distribution, n_classes, order, output_type):

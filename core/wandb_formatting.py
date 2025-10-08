@@ -8,7 +8,7 @@ def create_config_dico(cfg):
             'num_workers': cfg['num_workers'],
             'is_using_wandb': cfg['is_using_wandb'],
 
-            'M': cfg['model']['M'],
+            'n': cfg['model']['n'],
             'prior': cfg['model']['prior'],
             'pred': cfg['model']['pred'],
             'stump_init': cfg['model']['stump_init'],
@@ -23,7 +23,7 @@ def create_config_dico(cfg):
             'num_epochs': cfg['training']['num_epochs'],
             'risk': cfg['training']['risk'],
             'distribution': cfg['training']['distribution'],
-            'rand_n': cfg['training']['rand_n'],
+            'rand_N': cfg['training']['rand_N'],
             'compute_disintegration': cfg['training']['compute_disintegration'],
             'normalize_data': cfg['training']['normalize_data'],
 

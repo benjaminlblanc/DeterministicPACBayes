@@ -4,8 +4,7 @@ from tqdm import tqdm
 import torch
 
 from core.bounds import test_set_bound, vcdim_bound
-from core.deterministic_bounding import compute_bound, compute_part_triple_bound
-from core.losses import triple_loss
+from core.deterministic_bounding import compute_bound, compute_part_bound
 
 
 def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None, monitor=None):
@@ -17,14 +16,14 @@ def train_stochastic(dataloader, model, optimizer, epoch, bound=None, loss=None,
     last_iter = epoch * len(dataloader)
 
     for i, batch in enumerate(dataloader):
-        n = len(batch[0])
+        m_batch = len(batch[0])
         data = batch[1], batch[0]
 
         optimizer.zero_grad()
 
         # If there is a bound to optimize, we optimize it; otherwise, we minimize the risk
         if bound is not None:
-            cost = bound(n, model, model.risk(data, loss), sample=False)
+            cost = bound(m_batch, model, model.risk(data, loss), sample=False)
         else:
             cost = model.risk(data, loss)
 
@@ -48,13 +47,13 @@ def train_stochastic_multiset(dataloaders, model, optimizer, epoch, bound=None, 
     for i, *batches in zip(pbar, *dataloaders):
         X = [batch[0] for batch in batches]
         # sum sizes of loaders
-        n = sum(map(len, X))
+        m_batch = sum(map(len, X))
         data = [(batches[i][1], X[i]) for i in range(len(batches))]
         optimizer.zero_grad()
 
         if bound is not None:
             # If there is a bound to optimize, we optimize it; otherwise, we minimize the risk
-            cost = bound(n, model, model.risk(data, loss), False)
+            cost = bound(m_batch, model, model.risk(data, loss), False)
         else:
             cost = model.risk(data, loss)
 
@@ -71,31 +70,19 @@ def evaluate(dataloader, model, epoch=-1, bounds=None, loss=None, monitor=None, 
     """
     model.eval()
 
-    # Depending on the situation, we either compute the regular loss or the triple loss.
-    risk = torch.tensor([0., 0., 0.])
-    n = torch.tensor([0, 0, 0])
+    risk = torch.tensor(0.)
+    m = torch.tensor(0)
 
     for batch in dataloader:
         data = batch[1], batch[0]
-
-        model_risk = model.risk(data, loss=loss, mean=False)
-        # If the model_risk if a tuple (of three risks and three ns), then the triple loss is computed.
-        if type(model_risk) != tuple:
-            risk += model_risk
-            n += len(data[0])
-        else:
-            risk += model_risk[0]
-            n += model_risk[1]
-
-    risk /= n
-    total_metrics = {"error": risk[0].item()}
-    if type(model_risk) != tuple:
-        risk = risk[0]
-
+        risk += model.risk(data, loss=loss, mean=False)
+        m += len(data[0])
+    risk /= m
+    total_metrics = {"error": risk.item()}
     if bounds is not None:
         for k in bounds.keys():
             if bounds[k] is not None:
-                total_metrics[k] = bounds[k](n[0], model, risk, False).item()
+                total_metrics[k] = bounds[k](m, model, risk, False).item()
 
     if monitor:
         monitor.write(epoch, **{tag: total_metrics})
@@ -110,21 +97,21 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
     model.eval()
 
     risk = 0.
-    n = 0
+    m = 0
 
     for batches in zip(*dataloaders):
         X = [batch[0] for batch in batches]
         data = [(batches[i][1], X[i]) for i in range(len(batches))]
         risk += model.risk(data, loss=loss, mean=False)
-        n += len(X[0])
+        m += len(X[0])
 
-    risk /= n
+    risk /= m
     total_metrics = {"error": risk.item()}
 
     if bounds is not None:
         for k in bounds.keys():
             if bounds[k] is not None:
-                total_metrics[k] = bounds[k](n, model, risk, False).item()
+                total_metrics[k] = bounds[k](m, model, risk, False).item()
 
     if monitor:
         monitor.write(epoch, **{tag: total_metrics})
@@ -132,8 +119,8 @@ def evaluate_multiset(dataloaders, model, epoch=-1, bounds=None, loss=None, moni
     return total_metrics
 
 
-def stochastic_routine(trainloader, validloader, trtestloader, testloader, model, optimizer, bound, n, loss,
-                       monitor, lr_scheduler, test_bound, n_classes, cfg):
+def stochastic_routine(trainloader, validloader, trtestloader, testloader, model, optimizer, bound, m, loss,
+                       monitor, lr_scheduler, n_classes, cfg):
     """
     Main training pipeline.
     """
@@ -143,7 +130,6 @@ def stochastic_routine(trainloader, validloader, trtestloader, testloader, model
     distribution_name = cfg.training.distribution
     risk_type = cfg.training.risk
     pred_type = cfg.model.pred
-    output_type = cfg.model.output
 
     best_obj = float("inf")
     best_model = deepcopy(model)
@@ -188,11 +174,12 @@ def stochastic_routine(trainloader, validloader, trtestloader, testloader, model
     if metric_to_optimize == "error":
         if cfg.training.risk == "Test":
             trtest_error = test_routine(trtestloader, best_model)
-            bound = test_set_bound(int(trtest_error['error'] * n / 5), torch.tensor(int(n / 5)), cfg.bound.delta)
+            bound = test_set_bound(int(trtest_error['error'] * m * cfg.training.splits[2]),
+                                   torch.tensor(int(m * cfg.training.splits[2])), cfg.bound.delta)
             string += f"; test-set bound: {round(bound, 4)}"
         elif cfg.training.risk == "VCdim":
             error = test_routine(trainloader, best_model)
-            bound = vcdim_bound(n, model, error['error'], cfg.bound.delta)
+            bound = vcdim_bound(m, model, error['error'], cfg.bound.delta)
             string += f"; VC-dim bound: {round(bound, 4)}"
         train_error = {'error': best_obj}
         final_bound = {'bound': bound}
@@ -203,14 +190,11 @@ def stochastic_routine(trainloader, validloader, trtestloader, testloader, model
         string += f"; {bound_type} bound: {round(best_obj, 4)}"
 
     if risk_type == "FO":
-        triple_bnd = compute_bound(best_model, test_bound, n, trainloader, lambda x, y, z:
-            triple_loss(x, y, z, pred_type, distribution_name, n_classes, output_type), False)
-        M = torch.prod(torch.tensor(best_model.get_unchanged_post().shape))
-        partition_bound = compute_part_triple_bound(best_model, bound, n, M, trainloader, loss, distribution_name,
-                                                    final_bound['bound'], multiclass=n_classes > 2)[0]
+        n = torch.prod(torch.tensor(best_model.get_unchanged_post().shape))
+        partition_bound = compute_part_bound(best_model, bound, m, n, trainloader, loss, distribution_name,
+                                                    final_bound['bound'], multiclass=n_classes > 2)
         string += f"; partition bound: {round(partition_bound.item(), 4)}\n"
     else:
-        triple_bnd = (None, None)
         string += "\n"
     print(string)
 
@@ -227,7 +211,7 @@ def stochastic_routine(trainloader, validloader, trtestloader, testloader, model
             model_to_randomize.random_draw_new_post()
             # We then computed the several considered metrics
             test_errors.append(test_routine(testloader, model_to_randomize)['error'])
-            bounds.append(compute_bound(model_to_randomize, bound, n, trainloader, loss, disintegrated=True))
+            bounds.append(compute_bound(model_to_randomize, bound, m, trainloader, loss, disintegrated=True))
             # And we set back the optimal posterior, so that the draw is done according to the correct distribution
             model_to_randomize.set_post(best_model_post)
         test_error['error_sampled'] = torch.mean(torch.tensor(test_errors)).item()
@@ -240,4 +224,4 @@ def stochastic_routine(trainloader, validloader, trtestloader, testloader, model
         final_bound['bound_sampled'] = 0
         final_bound['bound_sampled_std'] = 0
 
-    return best_model, final_bound, train_error, test_error, t2 - t1, triple_bnd[0], triple_bnd[1]
+    return best_model, final_bound, train_error, test_error, t2 - t1

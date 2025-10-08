@@ -24,7 +24,7 @@ def get_indices(possible_values, sums):
         possible_values[cur[0][0]] = -1
     return [tot_1, tot_2]
 
-def get_b_c(possible_values, M, distribution, multiclass=False):
+def get_b_c(possible_values, n, distribution, multiclass=False):
     """
     Returns the l and u values from the true-risk bound (see --).
     """
@@ -56,7 +56,7 @@ def get_b_c(possible_values, M, distribution, multiclass=False):
     elif distribution == "dirichlet":
         return I(biggest_sum + smallest_sum, torch.tensor(0)), I(smallest_sum, biggest_sum)
     elif distribution == "gaussian":
-        return Phi(torch.sum(torch.abs(possible_values)) / M ** 0.5), 1 - Phi((biggest_sum - smallest_sum) / M ** 0.5)
+        return Phi(torch.sum(torch.abs(possible_values)) / n ** 0.5), 1 - Phi((biggest_sum - smallest_sum) / n ** 0.5)
 
 def compute_bound(model, bound, n, trainloader, loss, disintegrated):
     """
@@ -81,59 +81,38 @@ def compute_bound(model, bound, n, trainloader, loss, disintegrated):
         cur_PB_bound = bound(n, model, model.risk(trainloader, loss), disintegrated)
     return cur_PB_bound
 
-def compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name, Gibbs_risk=None,
-                              b_triple=0, c_triple=0.5, multiclass=False):
+def compute_part_bound(model, bound, m, n, trainloader, loss, distribution_name, Gibbs_risk=None, multiclass=False):
     """
     Pipeline for computing the deterministic bound.
     """
     post = model.get_post()
-    b, c = get_b_c(post, M, distribution_name, multiclass)
+    b, c = get_b_c(post, n, distribution_name, multiclass)
 
     # If the bound on the Gibbs risk is not given, we have to compute it
     if Gibbs_risk is None:
-        Gibbs_risk = compute_bound(model, bound, n, trainloader, loss, False)
+        Gibbs_risk = compute_bound(model, bound, m, trainloader, loss, False)
 
-    # We compute the best b and c out of the one given by the partition bound and the one given by the triple bound
-    best_b = max(b, b_triple)
-    best_c = max(c, c_triple)
+    return (Gibbs_risk - b) / (c - b)
 
-    b_triple = max(b_triple, 0)
-    c_triple = max(c_triple, 0.5)
-
-    part = (Gibbs_risk - b) / (c - b)
-    # Triple bound yields weird results if Gibbs_risk < b_triple, c_triple < b_triple, or
-    #   c_triple - b_triple << Gibbs_risk - b_triple.
-    triple = (Gibbs_risk - b_triple) / (c_triple - b_triple)
-    # Allowing for this arbitrary choice of b and c can lead to values being smaller than the Gibbs risk...
-    part_triple = max((Gibbs_risk - best_b) / (best_c - best_b), Gibbs_risk)
-
-    if not torch.is_tensor(triple):
-        triple = torch.tensor(triple)
-    if not torch.is_tensor(part_triple):
-        part_triple = torch.tensor(part_triple)
-    return part, torch.clamp(triple, 0, 2), torch.clamp(part_triple, 0, 2)
-
-def clip_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, distribution_name, b_surr, c_surr):
+def clip_weak_learners(model, m, bound, trainloader, loss, prior_coefficient, distribution_name):
     """
     Assigns small weights to predictors with medium weights, so b and c are the smallest possible (partition bound).
     """
     best_post = model.get_unchanged_post().clone()
     sorted_post = torch.sort(torch.abs(best_post.clone()))[0]
     post = model.get_unchanged_post().clone()
-    M = len(best_post)
-    best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                           b_triple=b_surr, c_triple=c_surr)[0]
+    n = len(best_post)
+    best_bound = compute_part_bound(model, bound, m, n, trainloader, loss, distribution_name)
     print(f"\nCurrent partition bound: {round(best_bound.item(), 4)}.")
     print("Clipping weak learners...")
     pbar = tqdm(list(range(10, 100, 10)) + list(range(91, 100, 1)))
     for i in pbar:
-        max_idx = int(M * i / 100) - 1
+        max_idx = int(n * i / 100) - 1
         # We try several simplification of the posterior by clipping the smallest values to the prior values. Having
         #   lesser small values help to obtain better partitioning bound.
         post[torch.abs(best_post) <= sorted_post[max_idx]] = prior_coefficient
         model.set_post(post)
-        cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                              b_triple=b_surr, c_triple=c_surr)[0]
+        cur_bound = compute_part_bound(model, bound, m, n, trainloader, loss, distribution_name)
         if cur_bound < best_bound:
             best_bound = cur_bound.clone()
             best_post = post.clone()
@@ -141,15 +120,14 @@ def clip_weak_learners(model, n, bound, trainloader, loss, prior_coefficient, di
     print(f"\nCurrent partition bound: {round(best_bound.item(), 4)}.")
     return model
 
-def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_name, b_surr, c_surr):
+def manual_coordinate_descent(model, m, bound, trainloader, loss, distribution_name):
     """
     Manual coordinate descent.
     """
     print("Manual coordinate descent...")
     best_post = model.get_unchanged_post().clone()
-    M = len(best_post)
-    best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                           b_triple=b_surr, c_triple=c_surr)[0]
+    n = len(best_post)
+    best_bound = compute_part_bound(model, bound, m, n, trainloader, loss, distribution_name)
     while True:
         previous_best_bound = best_bound.clone()
         rang, factor = [], torch.max(model.get_unchanged_post()) / 100
@@ -167,8 +145,7 @@ def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_n
                     post[i] = new_post_i
                     model.set_post(post)
                     # And compute the resulting bound.
-                    cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                                          b_triple=b_surr, c_triple=c_surr)[0]
+                    cur_bound = compute_part_bound(model, bound, m, n, trainloader, loss, distribution_name)
                     if cur_bound < best_bound:
                         best_bound = cur_bound.clone()
                         best_post = post.clone()
@@ -182,7 +159,7 @@ def manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_n
     return model
 
 
-def weights_rescaling(model, n, bound, trainloader, loss, distribution_name, b_surr, c_surr):
+def weights_rescaling(model, m, bound, trainloader, loss, distribution_name):
     """
     We try several rescaling values for computing the optimal partition bound (the higher the rescaling factor, the
     values for b and c are, but the worse is the KL penalty).
@@ -190,9 +167,8 @@ def weights_rescaling(model, n, bound, trainloader, loss, distribution_name, b_s
     print("Weights rescaling...")
     initial_post = model.get_unchanged_post().clone()
     best_post = model.get_unchanged_post().clone()
-    M = len(best_post)
-    best_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                           b_triple=b_surr, c_triple=c_surr)[0]
+    n = len(best_post)
+    best_bound = compute_part_bound(model, bound, m, n, trainloader, loss, distribution_name)
     low = 0
     high = 10 if distribution_name in ['categorical', 'dirichlet'] else 1e2
     pbar = tqdm(range(15))
@@ -201,8 +177,7 @@ def weights_rescaling(model, n, bound, trainloader, loss, distribution_name, b_s
             mean = (low + high) / 2
             post = initial_post * mean
             model.set_post(post)
-            cur_bound = compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                                  b_triple=b_surr, c_triple=c_surr)[0]
+            cur_bound = compute_part_bound(model, bound, m, n, trainloader, loss, distribution_name)
             if cur_bound < best_bound:
                 best_bound = cur_bound.clone()
                 best_post = post.clone()

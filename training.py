@@ -13,9 +13,9 @@ from data.init import Dataset, TorchDataset
 from models.majority_vote import MultipleMajorityVote, MajorityVote
 from models.pretrainedDNN import LinearMultiClassifier
 
-from core.losses import initialize_risk, triple_loss
-from core.deterministic_bounding import clip_weak_learners, compute_part_triple_bound, manual_coordinate_descent, \
-    weights_rescaling, compute_bound
+from core.losses import initialize_risk
+from core.deterministic_bounding import clip_weak_learners, compute_part_bound, manual_coordinate_descent, \
+    weights_rescaling
 from core.wandb_formatting import create_config_dico, create_run_name
 from core.bounds import BOUNDS
 from core.monitors import MonitorMV
@@ -64,7 +64,7 @@ def main(cfg):
             # Initialize the dataset, loss utilized, etc.
             data = Dataset(cfg.dataset, normalize=cfg.training.normalize_data,
                            data_path=Path(hydra.utils.get_original_cwd()) / "data", valid_size=0)
-            n = len(data.X_train)
+            m_train = len(data.X_train)
 
             # Define params for each method.
             n_classes = get_n_classes(cfg.dataset)
@@ -78,23 +78,21 @@ def main(cfg):
                 delta /= cfg.bound.n_grid
 
             # The main bound to optimize, and the surrogate bound to test (if risk == FO).
-            if cfg.training.risk == 'Tr':
+            validloader, trtestloader = None, None
+            if cfg.training.risk in ['Test', 'VCdim']:
                 bound = None
             else:
-                bound = lambda _, model, risk, sample: BOUNDS[cfg.bound.type](n, model, risk, delta, div, False,
+                bound = lambda _, modl, risk, sample: BOUNDS[cfg.bound.type](m_train, model, risk, delta, div, False,
                                                                               bound_coeff, cfg.bound.order)
-            triple_bound = lambda _, model, risk, sample: BOUNDS['triple'](n, model, risk, delta, div, False,
-                                                                               bound_coeff, cfg.bound.order)
-
             # Initializing the predictors, the number of base classifiers.
-            predictors, M = initialize_predictors(cfg, data)
+            predictors, n = initialize_predictors(cfg, data)
             # This corresponds to the prior value to consider for each parameter.
-            prior_coefficient = 1 / M if cfg.model.prior == "adjusted" else int(cfg.model.prior)
+            prior_coefficient = 1 / n if cfg.model.prior == "adjusted" else int(cfg.model.prior)
             # This corresponds to the replacement value to use in the "crop_weak_learner" method.
             prior_value = -5 if cfg.training.distribution == "categorical" else prior_coefficient
 
             if cfg.model.pred == "UniformStumps":
-                betas = torch.ones(M) * prior_coefficient  # uniform prior
+                betas = torch.ones(n) * prior_coefficient  # uniform prior
 
                 model = MajorityVote(predictors, betas, n_classes, distribution_name, kl_factor, cfg.model.output)
 
@@ -102,39 +100,112 @@ def main(cfg):
                 data.X_train = model.forward(torch.tensor(data.X_train))
                 data.X_test = model.forward(torch.tensor(data.X_test))
 
-                trainloader = DataLoader(TorchDataset(data.X_train, data.y_train), batch_size=cfg.training.batch_size,
-                                         num_workers=cfg.num_workers, shuffle=True)
-                testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096,
-                                        num_workers=cfg.num_workers, shuffle=False)
+                if cfg.training.risk == "Test":
+                    tr_split = int(cfg.training.splits[0] * m_train)
+                    vd_split = int((cfg.training.splits[0] + cfg.training.splits[1]) * m_train)
+                    X_train, y_train = data.X_train[:tr_split], data.y_train[:tr_split]
+                    X_valid, y_valid = (data.X_train[tr_split:vd_split], data.y_train[tr_split:vd_split])
+                    X_trtest, y_trtest = data.X_train[vd_split:], data.y_train[vd_split:]
+                    trainloader = DataLoader(TorchDataset(X_train, y_train),
+                                             batch_size=cfg.training.batch_size,
+                                             num_workers=cfg.num_workers, shuffle=True)
+                    validloader = DataLoader(TorchDataset(X_valid, y_valid),
+                                             batch_size=cfg.training.batch_size,
+                                             num_workers=cfg.num_workers, shuffle=True)
+                    trtestloader = DataLoader(TorchDataset(X_trtest, y_trtest),
+                                               batch_size=cfg.training.batch_size,
+                                               num_workers=cfg.num_workers, shuffle=True)
+                    testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096,
+                                            num_workers=cfg.num_workers, shuffle=False)
+                else:
+                    trainloader = DataLoader(TorchDataset(data.X_train, data.y_train),
+                                             batch_size=cfg.training.batch_size,
+                                             num_workers=cfg.num_workers, shuffle=True)
+                    testloader = DataLoader(TorchDataset(data.X_test, data.y_test), batch_size=4096,
+                                            num_workers=cfg.num_workers, shuffle=False)
 
             elif cfg.model.pred == "RandomForests": # random forest
-                betas = [torch.ones(M // 2) * prior_coefficient, torch.ones(M // 2) * prior_coefficient] # uniform prior
+                betas = [torch.ones(n // 2) * prior_coefficient, torch.ones(n // 2) * prior_coefficient] # uniform prior
 
                 # weights equivalent for each forest
                 model = MultipleMajorityVote(predictors, betas, n_classes, (0.5, 0.5), distribution_name,
                                              kl_factor, cfg.model.output)
 
-                m_train = len(data.X_train) // 2
-                m_test = len(data.X_test) // 2
-                # We change the dataset by the model prediction, since the trees won't change anymore.
-                data.X_train = model.forward([data.X_train[m_train:], data.X_train[:m_train]])
-                data.X_test = model.forward([data.X_test[m_test:], data.X_test[:m_test]])
+                if cfg.training.risk == "Test":
+                    tr_split = int(cfg.training.splits[0] * m_train)
+                    vd_split = int((cfg.training.splits[0] + cfg.training.splits[1]) * m_train)
+                    X_train, y_train = data.X_train[:tr_split], data.y_train[:tr_split]
+                    X_valid, y_valid = (data.X_train[tr_split:vd_split], data.y_train[tr_split:vd_split])
+                    X_trtest, y_trtest = data.X_train[vd_split:], data.y_train[vd_split:]
+                    half_m_train = len(X_train) // 2
+                    half_m_valid = len(X_valid) // 2
+                    half_m_trtest = len(X_trtest) // 2
+                    half_m_test = len(data.X_test) // 2
 
-                train1 = TorchDataset(data.X_train[0], data.y_train[m_train:])
-                train2 = TorchDataset(data.X_train[1], data.y_train[:m_train])
+                    # We change the dataset by the model prediction, since the trees won't change anymore.
+                    X_train = model.forward([X_train[half_m_train:], X_train[:half_m_train]])
+                    X_valid = model.forward([X_valid[half_m_valid:], X_valid[:half_m_valid]])
+                    X_trtest = model.forward([X_trtest[half_m_trtest:], X_trtest[:half_m_trtest]])
+                    X_test = model.forward([data.X_test[half_m_test:], data.X_test[:half_m_test]])
 
-                test1 = TorchDataset(data.X_test[0], data.y_test[m_test:])
-                test2 = TorchDataset(data.X_test[1], data.y_test[:m_test])
+                    train1 = TorchDataset(X_train[0], y_train[half_m_train:])
+                    train2 = TorchDataset(X_train[1], y_train[:half_m_train])
 
-                trainloader = [
-                    DataLoader(train1, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers,
-                               shuffle=True),
-                    DataLoader(train2, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers,
-                               shuffle=True)
-                ]
+                    valid1 = TorchDataset(X_valid[0], y_valid[half_m_valid:])
+                    valid2 = TorchDataset(X_valid[1], y_valid[:half_m_valid])
 
-                testloader = [DataLoader(test1, batch_size=4096, num_workers=cfg.num_workers, shuffle=False),
-                              DataLoader(test2, batch_size=4096, num_workers=cfg.num_workers, shuffle=False)]
+                    trtest1 = TorchDataset(X_trtest[0], y_trtest[half_m_trtest:])
+                    trtest2 = TorchDataset(X_trtest[1], y_trtest[:half_m_trtest])
+
+                    test1 = TorchDataset(X_test[0], data.y_test[half_m_test:])
+                    test2 = TorchDataset(X_test[1], data.y_test[:half_m_test])
+
+                    trainloader = [
+                        DataLoader(train1, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers, shuffle=True),
+                        DataLoader(train2, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers, shuffle=True)
+                    ]
+
+                    validloader = [
+                        DataLoader(valid1, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers, shuffle=True),
+                        DataLoader(valid2, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers, shuffle=True)
+                    ]
+
+                    trtestloader = [
+                        DataLoader(trtest1, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers, shuffle=True),
+                        DataLoader(trtest2, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers, shuffle=True)
+                    ]
+
+                    testloader = [DataLoader(test1, batch_size=4096, num_workers=cfg.num_workers, shuffle=False),
+                                  DataLoader(test2, batch_size=4096, num_workers=cfg.num_workers, shuffle=False)]
+                else:
+                    half_m_train = len(data.X_train) // 2
+                    tq_m_train = int(len(data.X_train) * (3 / 4))
+                    half_m_test = len(data.X_test) // 2
+                    tq_m_test = int(len(data.X_test) * (3 / 4))
+                    if cfg.training.risk == "VCdim":
+                        # We change the dataset by the model prediction, since the trees won't change anymore.
+                        data.X_train = model.forward([data.X_train[tq_m_train:], data.X_train[half_m_train:tq_m_train]])
+                        data.X_test = model.forward([data.X_test[tq_m_test:], data.X_test[half_m_test:tq_m_test]])
+                    else:
+                        # We change the dataset by the model prediction, since the trees won't change anymore.
+                        data.X_train = model.forward([data.X_train[half_m_train:], data.X_train[:half_m_train]])
+                        data.X_test = model.forward([data.X_test[half_m_test:], data.X_test[:half_m_test]])
+
+                    train1 = TorchDataset(data.X_train[0], data.y_train[half_m_train:])
+                    train2 = TorchDataset(data.X_train[1], data.y_train[:half_m_train])
+
+                    test1 = TorchDataset(data.X_test[0], data.y_test[half_m_test:])
+                    test2 = TorchDataset(data.X_test[1], data.y_test[:half_m_test])
+
+                    trainloader = [
+                        DataLoader(train1, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers,
+                                   shuffle=True),
+                        DataLoader(train2, batch_size=cfg.training.batch_size // 2, num_workers=cfg.num_workers,
+                                   shuffle=True)
+                    ]
+
+                    testloader = [DataLoader(test1, batch_size=4096, num_workers=cfg.num_workers, shuffle=False),
+                                  DataLoader(test2, batch_size=4096, num_workers=cfg.num_workers, shuffle=False)]
 
             else:
                 # Adding the bias
@@ -145,7 +216,7 @@ def main(cfg):
                 output_size = n_classes
                 # Here, the model corresponds in a linear layer; not a vector of voters, but a matrix of weights
                 betas = torch.zeros(input_size, output_size)  # uniform prior
-                M = input_size * output_size
+                n = input_size * output_size
 
                 # Here, no need to compute a forward pass on the dataset: it directly corresponds to the embedding
                 model = LinearMultiClassifier(input_size, output_size, betas, cfg.model.posterior_std, cfg.model.output)
@@ -172,56 +243,40 @@ def main(cfg):
                 seed_results["time"] = time
             else:
                 # First training phase
-                model, final_bound, train_error, test_error, time, b_surrogate, c_surrogate = \
-                    stochastic_routine(trainloader, testloader, model, optimizer, bound, n, loss, monitor,
-                                       lr_scheduler, triple_bound, n_classes, cfg)
-                # part_bnd (partition bound); triple_bnd (triple bound); part_triple_bnd (combines the best elements of
-                #   both the partition and the triple bound; is thus necessarily lower or equal to both of them).
+                model, final_bound, train_error, test_error, time = \
+                    stochastic_routine(trainloader, validloader, trtestloader, testloader, model, optimizer, bound,
+                                       m_train, loss, monitor, lr_scheduler, n_classes, cfg)
+                # part_bnd refers to the partition bound.
                 #   deterministic_bound refers to the benchmark bound (factor 2, in the case of risk = FO).
                 #   The proposed bounds are optimized with risk = FO, since the objective function is similar to that
                 #   of the factor-2 bound.
                 if cfg.training.risk == "FO":
-                    triple_test_loss = lambda x, y, z: triple_loss(x, y, z, cfg.model.pred, distribution_name,
-                                                                   n_classes, cfg.model.output)
-                    part_bnd, triple_bnd, part_triple_bnd = \
-                        compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                                  final_bound['bound'], b_surrogate, c_surrogate, multiclass)
+                    part_bnd = compute_part_bound(model, bound, m_train, n, trainloader, loss, distribution_name,
+                                                  final_bound['bound'], multiclass)
                     # The dirichlet distribution is not allowed for the benchmarks algorithms
                     deterministic_bound = final_bound['bound'] * 2 if cfg.training.distribution != "dirichlet" else 2
 
                     # Results are compiled in the 'seed_results' dictionary
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error,
-                                                               deterministic_bound, final_bound, part_bnd.item(),
-                                                               triple_bnd.item(), part_triple_bnd.item())
+                                                               deterministic_bound, final_bound, part_bnd.item())
 
                     if cfg.training.distribution == "gaussian" and multiclass:
                         # The partition bound does not concern the multiclass gaussian approach
                         part_bnd_tnd = part_bnd
-                        triple_bnd_tnd = triple_bnd
-                        part_triple_bnd_tnd = part_triple_bnd
                     else:
                         # Cropping the weight of base predictors that barely have an effect on the prediction
-                        model = clip_weak_learners(model, n, bound, trainloader, loss, prior_value, distribution_name,
-                                                   b_surrogate, c_surrogate)
-                        b_surrogate, c_surrogate = compute_bound(model, triple_bound, n, trainloader,
-                                                                 triple_test_loss, False)
+                        model = clip_weak_learners(model, m_train, bound, trainloader, loss, prior_value,
+                                                   distribution_name)
 
                         # Manual coordinate descent on the weights
-                        model = manual_coordinate_descent(model, n, bound, trainloader, loss, distribution_name,
-                                                          b_surrogate, c_surrogate)
-                        b_surrogate, c_surrogate = compute_bound(model, triple_bound, n, trainloader,
-                                                                 triple_test_loss, False)
+                        model = manual_coordinate_descent(model, m_train, bound, trainloader, loss, distribution_name)
 
                         # Finally: we try finding the optimal weight scaling for the partition bound.
-                        model = weights_rescaling(model, n, bound, trainloader, loss, distribution_name,
-                                                  b_surrogate, c_surrogate)
-                        b_surrogate, c_surrogate = compute_bound(model, triple_bound, n, trainloader,
-                                                                    triple_test_loss, False)
+                        model = weights_rescaling(model, m_train, bound, trainloader, loss, distribution_name)
 
                         # We need to recompute the train error, test error, and the bounds
-                        part_bnd_tnd, triple_bnd_tnd, part_triple_bnd_tnd = \
-                            compute_part_triple_bound(model, bound, n, M, trainloader, loss, distribution_name,
-                                                      None, b_surrogate, c_surrogate, multiclass)
+                        part_bnd_tnd = compute_part_bound(model, bound, m_train, n, trainloader, loss,
+                                                          distribution_name, None, multiclass)
                         if multiclass:
                             val_routine = evaluate_multiset
                             test_routine = evaluate_multiset
@@ -233,15 +288,12 @@ def main(cfg):
 
                     # Results are compiled in the 'seed_results' dictionary
                     seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error,
-                                                              part_bnd_tnd.item(),
-                                                              triple_bnd_tnd.item(),
-                                                              part_triple_bnd_tnd.item(), i)
+                                                              part_bnd_tnd.item(), i)
                 else:
                     seed_results = updating_first_seed_results(seed_results, time, train_error, test_error,
-                                                               final_bound['bound'], final_bound, part_bnd=2,
-                                                               triple_bnd=2, part_triple_bnd=2)
-                    seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error,part_bnd_tnd=2,
-                                                              triple_bnd_tnd=2, part_triple_bnd_tnd=2, i=i)
+                                                               final_bound['bound'], final_bound, part_bnd=2)
+                    seed_results = updating_last_seed_results(seed_results, cfg, train_error, test_error,
+                                                              part_bnd_tnd=2, i=i)
 
             # save seed results
             np.save(SAVE_DIR / "err-b.npy", seed_results)
