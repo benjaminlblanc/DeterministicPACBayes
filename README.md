@@ -19,7 +19,7 @@ Set the `is_using_wandb` hyperparameter from the shell script that is used (`run
 
 The generic hyperparameters are found in `base_config.yaml`. The more specific hyperparameters are found in the shell scripts. Take a look at the `hyperparameters_dictionary.txt` file to learn more about the effect of the many tunable hyperparameters.
 
-## Shoutout to some inspiration
+### Shoutout to some inspiration
 
 - A general adaptation of the code from [Learning Stochastic Majority Votes by Minimizing a PAC-Bayes Generalization Bound](https://github.com/vzantedeschi/StocMV). 
 - Inspiration from [rnoxy](https://github.com/rnoxy/cifar10-cnn) for creating the embedded datasets.
