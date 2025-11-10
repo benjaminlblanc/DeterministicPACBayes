@@ -1,6 +1,6 @@
 # A Framework for Bounding Deterministic Risk with PAC-Bayes: Applications to Majority Votes
 
-A work by Leblanc and Germain.
+A work by [Leblanc and Germain](https://arxiv.org/abs/2510.25569).
 
 ### Dependencies
 
