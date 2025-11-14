@@ -5,7 +5,7 @@ A work by [Leblanc and Germain](https://arxiv.org/abs/2510.25569).
 ### Dependencies
 
 - Use Python 3.8.20.
-- Install the other requirements from the `requirements.txt`
+- Install the other requirements from the `requirements.txt` file.
 
 ### Reproducing the main results
 
