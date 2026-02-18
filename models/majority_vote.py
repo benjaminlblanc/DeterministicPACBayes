@@ -10,7 +10,7 @@ class MajorityVote(torch.nn.Module):
     kl_factor (float): KL penalty factor.
     output_type (str): type of prediction rendered by the base classifiers.
     """
-    def __init__(self, voters, prior, n_classes, distr_name, kl_factor=1., output_type='class'):
+    def __init__(self, voters, prior, n_classes, n_per_feature, distr_name, kl_factor=1., output_type='class'):
         super(MajorityVote, self).__init__()
         
         if distr_name not in ["dirichlet", "gaussian", "categorical"]:
@@ -20,6 +20,7 @@ class MajorityVote(torch.nn.Module):
         self.distribution_name = distr_name
         self.n_classes = n_classes
         self.output_type = output_type
+        self.n_per_feature = n_per_feature
 
         # We inialize the current distribution.
         self.post = None
@@ -89,17 +90,17 @@ class MultipleMajorityVote(torch.nn.Module):
     kl_factor (float): KL penalty factor.
     output_type (str): type of prediction rendered by the base classifiers.
     """
-    def __init__(self, voter_sets, priors, n_classes, weights, distr_name, kl_factor=1., output_type='class'):
-
+    def __init__(self, voter_sets, priors, n_classes, n_per_feature, weights, distr_name, kl_factor=1., output_type='class'):
         super(MultipleMajorityVote, self).__init__()
 
         assert len(voter_sets) == len(priors), "must specify same number of voter_sets and priors"
         assert sum(weights) == 1., weights
 
-        self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, n_classes, distr_name, kl_factor, output_type)
+        self.mvs = torch.nn.ModuleList([MajorityVote(voters, prior, n_classes, n_per_feature, distr_name, kl_factor, output_type)
                                         for voters, prior in zip(voter_sets, priors)])
         self.weights = weights
         self.distribution_name = distr_name
+        self.n_per_feature = n_per_feature
 
     def forward(self, xs):
         return [mv.forward(x) for mv, x in zip(self.mvs, xs)]

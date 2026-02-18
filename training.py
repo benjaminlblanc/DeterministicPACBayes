@@ -94,7 +94,7 @@ def main(cfg):
             if cfg.model.pred == "UniformStumps":
                 betas = torch.ones(n) * prior_coefficient  # uniform prior
 
-                model = MajorityVote(predictors, betas, n_classes, distribution_name, kl_factor, cfg.model.output)
+                model = MajorityVote(predictors, betas, n_classes, cfg.model.n, distribution_name, kl_factor, cfg.model.output)
 
                 # We change the dataset by the model prediction, since the stumps won't change anymore.
                 data.X_train = model.forward(torch.tensor(data.X_train))
@@ -128,8 +128,8 @@ def main(cfg):
                 betas = [torch.ones(n // 2) * prior_coefficient, torch.ones(n // 2) * prior_coefficient] # uniform prior
 
                 # weights equivalent for each forest
-                model = MultipleMajorityVote(predictors, betas, n_classes, (0.5, 0.5), distribution_name,
-                                             kl_factor, cfg.model.output)
+                model = MultipleMajorityVote(predictors, betas, n_classes, cfg.model.n, (0.5, 0.5),
+                                             distribution_name, kl_factor, cfg.model.output)
 
                 if cfg.training.risk == "Test":
                     tr_split = int(cfg.training.splits[0] * m_train)
