@@ -23,7 +23,7 @@ def C_bound_optimization(cfg, x_train, y_train, x_test, y_test):
     def generate_MV_stump(x_train, y_train):
         majority_vote = DecisionStumpMV(
             x_train, y_train,
-            nb_per_attribute=cfg.model.M,
+            nb_per_attribute=cfg.model.n,
             complemented=True, quasi_uniform=False)
         return x_train, y_train, majority_vote
 
